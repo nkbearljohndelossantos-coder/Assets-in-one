@@ -120,7 +120,11 @@ router.post('/login', async (req, res) => {
 
     // Generate tokens
     const accessToken = jwt.sign(tokenPayload, process.env.JWT_SECRET || 'super_secret_jwt_key_123456_nkb_itms', { expiresIn: ACCESS_EXPIRY });
-    const refreshToken = jwt.sign({ id: user.id, sub: user.id }, process.env.JWT_REFRESH_SECRET || 'super_secret_refresh_jwt_key_123456_nkb_itms', { expiresIn: REFRESH_EXPIRY });
+    const refreshToken = jwt.sign(
+      { id: user.id, sub: user.id, jti: crypto.randomUUID() },
+      process.env.JWT_REFRESH_SECRET || 'super_secret_refresh_jwt_key_123456_nkb_itms',
+      { expiresIn: REFRESH_EXPIRY }
+    );
 
     // Store refresh token in database
     await db('refresh_tokens').insert({

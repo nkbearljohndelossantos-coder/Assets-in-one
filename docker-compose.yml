@@ -1,61 +1,75 @@
 version: '3.8'
 
+# Hostinger Docker Manager Project Name
+name: nkb-unified-assets
+
 services:
-  # Unified Application Container (Frontend + Backend)
+  # ==============================================================================
+  # UNIFIED ITMS + PPE APPLICATION SERVICE
+  # Single Modular Monolith container serving Backend API + Compiled Frontend SPA
+  # ==============================================================================
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nkb/unified-itms-ppe:latest
-    container_name: unified-itms-ppe-app
-    restart: unless-stopped
+    image: nkb-unified-assets:latest
+    container_name: nkb-unified-assets-app
+    restart: always
+    # Security: Bind only to local loopback interface so it is NEVER exposed directly to public internet
+    # Nginx reverse proxy routes public HTTPS traffic to this port
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5050:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
       - DB_CLIENT=sqlite3
       - DB_FILE=/app/backend/data/nkb_unified.sqlite
-      - JWT_SECRET=change_this_to_a_random_secure_64_char_secret_key_in_production
-      - JWT_REFRESH_SECRET=change_this_to_another_random_secure_64_char_secret_key
-      - JWT_ACCESS_EXPIRY=8h
-      - JWT_REFRESH_EXPIRY=7d
+      - APP_URL=${APP_URL:-https://asset.nkbmanufacturing.com}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://asset.nkbmanufacturing.com}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_ACCESS_EXPIRY=${JWT_ACCESS_EXPIRY:-8h}
+      - JWT_REFRESH_EXPIRY=${JWT_REFRESH_EXPIRY:-7d}
       - UPLOAD_DIR=uploads
-      - MAX_UPLOAD_MB=10
-      - LOG_LEVEL=info
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - app-data:/app/backend/data
       - app-uploads:/app/backend/uploads
       - app-logs:/app/backend/logs
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5000/api/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1536M
+        reservations:
+          memory: 256M
+    networks:
+      - nkb-network
 
-  # Optional Enterprise MySQL Database Container
-  # To enable, set DB_CLIENT=mysql2 in app environment and uncomment below
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: unified-itms-ppe-mysql
-  #   restart: unless-stopped
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: root_secure_password
-  #     MYSQL_DATABASE: nkb_unified_db
-  #     MYSQL_USER: nkb_user
-  #     MYSQL_PASSWORD: nkb_user_password
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - mysql-data:/var/lib/mysql
-
+# ==============================================================================
+# PERSISTENT STORAGE VOLUMES
+# Database, uploads, and logs are preserved across container updates and restarts
+# ==============================================================================
 volumes:
   app-data:
-    driver: local
+    name: nkb-unified-assets-data
   app-uploads:
-    driver: local
+    name: nkb-unified-assets-uploads
   app-logs:
-    driver: local
-  # mysql-data:
-  #   driver: local
+    name: nkb-unified-assets-logs
+
+# ==============================================================================
+# INTERNAL PRIVATE NETWORK
+# Isolates application traffic from external interfaces
+# ==============================================================================
+networks:
+  nkb-network:
+    name: nkb-unified-assets-net
+    driver: bridge

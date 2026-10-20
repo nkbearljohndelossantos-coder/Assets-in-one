@@ -1,0 +1,38 @@
+# Version control
+.git/
+.gitignore
+
+# Environment & credentials
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!.backend/.env.example
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Local databases and backups
+backend/data/*.sqlite
+backend/data/*.sqlite-*
+backend/data/*.bak
+backups/
+
+# Local build artifacts
+frontend/dist/
+dist/
+
+# Logs & temp files
+*.log
+backend/logs/*
+!.backend/logs/.gitkeep
+tmp/
+.temp/
+
+# OS and IDE caches
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
