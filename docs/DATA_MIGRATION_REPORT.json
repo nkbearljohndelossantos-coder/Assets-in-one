@@ -1,0 +1,43 @@
+{
+  "startedAt": "2026-10-20T02:33:16.523Z",
+  "dryRun": false,
+  "tables": {
+    "users": {
+      "sourceCount": 3,
+      "importedCount": 0,
+      "skippedCount": 3,
+      "errors": []
+    },
+    "ppe_asset_categories": {
+      "sourceCount": 5,
+      "importedCount": 0,
+      "skippedCount": 5,
+      "errors": []
+    },
+    "ppe_assets": {
+      "sourceCount": 2,
+      "importedCount": 0,
+      "skippedCount": 2,
+      "errors": []
+    },
+    "ppe_returnable_containers": {
+      "sourceCount": 2,
+      "importedCount": 0,
+      "skippedCount": 2,
+      "errors": []
+    }
+  },
+  "errors": [],
+  "reconciliation": [],
+  "completedAt": "2026-10-20T02:33:16.567Z",
+  "finalCounts": {
+    "users": 4,
+    "ppe_asset_categories": 5,
+    "ppe_assets": 6,
+    "ppe_gl_accounts": 10,
+    "ppe_journal_entries": 1,
+    "ppe_returnable_containers": 6,
+    "assets": 0,
+    "tickets": 0
+  }
+}

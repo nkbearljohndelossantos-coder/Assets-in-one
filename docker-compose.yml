@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Unified Application Container (Frontend + Backend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nkb/unified-itms-ppe:latest
+    container_name: unified-itms-ppe-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DB_CLIENT=sqlite3
+      - DB_FILE=/app/backend/data/nkb_unified.sqlite
+      - JWT_SECRET=change_this_to_a_random_secure_64_char_secret_key_in_production
+      - JWT_REFRESH_SECRET=change_this_to_another_random_secure_64_char_secret_key
+      - JWT_ACCESS_EXPIRY=8h
+      - JWT_REFRESH_EXPIRY=7d
+      - UPLOAD_DIR=uploads
+      - MAX_UPLOAD_MB=10
+      - LOG_LEVEL=info
+    volumes:
+      - app-data:/app/backend/data
+      - app-uploads:/app/backend/uploads
+      - app-logs:/app/backend/logs
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Optional Enterprise MySQL Database Container
+  # To enable, set DB_CLIENT=mysql2 in app environment and uncomment below
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: unified-itms-ppe-mysql
+  #   restart: unless-stopped
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root_secure_password
+  #     MYSQL_DATABASE: nkb_unified_db
+  #     MYSQL_USER: nkb_user
+  #     MYSQL_PASSWORD: nkb_user_password
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+
+volumes:
+  app-data:
+    driver: local
+  app-uploads:
+    driver: local
+  app-logs:
+    driver: local
+  # mysql-data:
+  #   driver: local

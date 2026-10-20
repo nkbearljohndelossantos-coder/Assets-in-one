@@ -1,0 +1,30 @@
+{
+  "name": "unified-itms-ppe",
+  "version": "1.0.0",
+  "description": "Unified IT Management System (ITMS) + Property, Plant and Equipment (PPE) Enterprise Web Application",
+  "main": "backend/src/server.js",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "cd frontend && npm run build",
+    "migrate": "node scripts/run-migrations.js",
+    "migrate:data": "node scripts/migrate-data.js",
+    "test": "node scripts/test-unified-suite.js",
+    "health": "node scripts/test-server-health.js"
+  },
+  "keywords": [
+    "itms",
+    "ppe",
+    "asset-management",
+    "depreciation",
+    "helpdesk",
+    "enterprise"
+  ],
+  "author": "NKB Enterprise Engineering Team",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

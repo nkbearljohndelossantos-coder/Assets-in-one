@@ -1,0 +1,43 @@
+{
+  "name": "nkb-unified-itms-ppe-server",
+  "version": "1.0.0",
+  "description": "Unified ITMS and PPE Web Application Backend",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback",
+    "seed": "knex seed:run",
+    "seed:demo": "knex seed:run --specific=02_demo_seed.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.6",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "jszip": "^3.10.1",
+    "knex": "^3.1.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.9.7",
+    "nodemailer": "^6.9.13",
+    "pdfkit": "^0.15.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.5",
+    "sqlite3": "^5.1.7",
+    "uuid": "^14.0.1",
+    "winston": "^3.13.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^7.0.0"
+  }
+}

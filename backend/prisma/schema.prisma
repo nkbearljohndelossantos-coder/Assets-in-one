@@ -1,0 +1,113 @@
+// Prisma Schema for NKB Enterprise API Platform
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ApiClient {
+  id                String       @id @default(uuid())
+  name              String       @db.VarChar(100)
+  appCode           String       @unique @map("app_code") @db.VarChar(50)
+  description       String?      @db.Text
+  ownerEmail        String       @map("owner_email") @db.VarChar(150)
+  status            String       @default("active") @db.VarChar(20)
+  rateLimitPerMin   Int          @default(100) @map("rate_limit_per_min")
+  rateLimitPerHour  Int          @default(1000) @map("rate_limit_per_hour")
+  expiresAt         DateTime?    @map("expires_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  lastUsedAt        DateTime?    @map("last_used_at")
+
+  apiKeys           ApiKey[]
+  auditLogs         ApiAuditLog[]
+
+  @@index([appCode, status])
+  @@map("api_clients")
+}
+
+model ApiKey {
+  id              String    @id @default(uuid())
+  clientId        String    @map("client_id")
+  keyPrefix       String    @map("key_prefix") @db.VarChar(30)
+  keyHash         String    @unique @map("key_hash") @db.VarChar(128)
+  name            String    @default("Primary Production Key") @db.VarChar(100)
+  status          String    @default("active") @db.VarChar(20)
+  allowedScopes   String    @map("allowed_scopes") @db.Text
+  customRateLimit Int?      @map("custom_rate_limit")
+  expiresAt       DateTime? @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+  revokedAt       DateTime? @map("revoked_at")
+
+  client          ApiClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash, status])
+  @@index([clientId])
+  @@map("api_keys")
+}
+
+model ApiScope {
+  id          String   @id @db.VarChar(50)
+  category    String   @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("api_scopes")
+}
+
+model ApiAuditLog {
+  id             String     @id @default(uuid())
+  requestId      String     @map("request_id") @db.VarChar(36)
+  clientId       String?    @map("client_id")
+  keyPrefix      String?    @map("key_prefix") @db.VarChar(30)
+  endpoint       String     @db.VarChar(255)
+  method         String     @db.VarChar(10)
+  statusCode     Int        @map("status_code")
+  responseTimeMs Int        @map("response_time_ms")
+  ipAddress      String     @map("ip_address") @db.VarChar(45)
+  userAgent      String?    @map("user_agent") @db.VarChar(255)
+  scopeUsed      String?    @map("scope_used") @db.VarChar(50)
+  errorCode      String?    @map("error_code") @db.VarChar(50)
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  client         ApiClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([clientId])
+  @@index([createdAt])
+  @@index([statusCode])
+  @@map("api_audit_logs")
+}
+
+model SecurityEvent {
+  id        String   @id @default(uuid())
+  eventType String   @map("event_type") @db.VarChar(50)
+  severity  String   @default("warning") @db.VarChar(20)
+  clientId  String?  @map("client_id")
+  ipAddress String   @map("ip_address") @db.VarChar(45)
+  endpoint  String   @db.VarChar(255)
+  details   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventType, createdAt])
+  @@index([ipAddress])
+  @@map("security_events")
+}
+
+model IdempotencyRecord {
+  keyHash      String   @id @map("key_hash") @db.VarChar(128)
+  clientId     String   @map("client_id")
+  endpoint     String   @db.VarChar(255)
+  statusCode   Int      @map("status_code")
+  responseBody String   @map("response_body") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@index([clientId, expiresAt])
+  @@map("idempotency_records")
+}
