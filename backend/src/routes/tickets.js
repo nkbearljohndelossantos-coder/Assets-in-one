@@ -32,7 +32,7 @@ router.get('/', authenticateToken, async (req, res) => {
         'tickets.*',
         'ticket_categories.name as category_name',
         'departments.name as department_name',
-        db.raw("concat(requester.first_name, ' ', requester.last_name) as requested_by_name"),
+        db.raw("(requester.first_name || ' ' || requester.last_name) as requested_by_name"),
         'tech.username as assigned_technician_name'
       );
 
@@ -109,7 +109,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         'tickets.*',
         'ticket_categories.name as category_name',
         'departments.name as department_name',
-        db.raw("concat(requester.first_name, ' ', requester.last_name) as requested_by_name"),
+        db.raw("(requester.first_name || ' ' || requester.last_name) as requested_by_name"),
         'tech.username as assigned_technician_name',
         'assets.name as asset_name',
         'assets.asset_code as asset_code'
@@ -131,7 +131,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       .select(
         'ticket_comments.*',
         'users.username',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as user_full_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as user_full_name")
       )
       .where('ticket_comments.ticket_id', id)
       .orderBy('ticket_comments.created_at', 'asc');

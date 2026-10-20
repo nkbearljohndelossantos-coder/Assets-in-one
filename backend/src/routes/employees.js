@@ -19,7 +19,7 @@ router.get('/departments', authenticateToken, async (req, res) => {
       .leftJoin('employees as head', 'departments.department_head_employee_id', 'head.id')
       .select(
         'departments.*',
-        db.raw("concat(head.first_name, ' ', head.last_name) as department_head_name")
+        db.raw("(head.first_name || ' ' || head.last_name) as department_head_name")
       )
       .orderBy('departments.name', 'asc');
     return res.json({ success: true, data: depts });
@@ -116,7 +116,7 @@ router.get('/', authenticateToken, async (req, res) => {
         'employees.*',
         'departments.name as department_name',
         'positions.name as position_name',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as full_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as full_name")
       );
 
     // Apply filters

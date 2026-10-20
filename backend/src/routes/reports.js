@@ -63,7 +63,7 @@ router.get('/assets', authenticateToken, requirePermission('reports.view'), asyn
         'assets.asset_code', 'assets.name', 'assets.brand', 'assets.model', 'assets.serial_number',
         'asset_categories.name as category_name', 'assets.condition', 'assets.status',
         'departments.name as department_name',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'assets.purchase_price', 'assets.purchase_date', 'assets.warranty_end_date'
       );
 
@@ -94,7 +94,7 @@ router.get('/assets/export', authenticateToken, requirePermission('reports.expor
         'assets.asset_code', 'assets.name', 'assets.brand', 'assets.model', 'assets.serial_number',
         'asset_categories.name as category_name', 'assets.condition', 'assets.status',
         'departments.name as department_name',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'assets.purchase_price', 'assets.purchase_date', 'assets.warranty_end_date'
       );
 
@@ -175,7 +175,7 @@ router.get('/tickets', authenticateToken, requirePermission('reports.view'), asy
       .select(
         'tickets.ticket_number', 'tickets.subject', 'ticket_categories.name as category_name',
         'tickets.priority', 'tickets.status', 
-        db.raw("concat(req.first_name, ' ', req.last_name) as requested_by_name"),
+        db.raw("(req.first_name || ' ' || req.last_name) as requested_by_name"),
         'tech.username as assigned_technician_name',
         'tickets.created_at', 'tickets.resolution_date', 'tickets.closed_date'
       );
@@ -207,7 +207,7 @@ router.get('/tickets/export', authenticateToken, requirePermission('reports.expo
       .select(
         'tickets.ticket_number', 'tickets.subject', 'ticket_categories.name as category_name',
         'tickets.priority', 'tickets.status', 
-        db.raw("concat(req.first_name, ' ', req.last_name) as requested_by_name"),
+        db.raw("(req.first_name || ' ' || req.last_name) as requested_by_name"),
         'tech.username as assigned_technician_name',
         'tickets.created_at', 'tickets.resolution_date', 'tickets.closed_date'
       );

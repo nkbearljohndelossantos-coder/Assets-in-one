@@ -338,7 +338,8 @@ ppeAssetsRouter.get('/:id/depreciation', authenticateToken, async (req, res, nex
 });
 
 // 8. GENERATE QR CODE FOR ASSET
-ppeAssetsRouter.get('/:id/qrcode', authenticateToken, async (req, res, next) => {
+// Allows browser image tags (<img>) and download links without requiring Authorization header
+ppeAssetsRouter.get('/:id/qrcode', async (req, res, next) => {
   try {
     const id = req.params.id;
     const asset = await db('ppe_assets')

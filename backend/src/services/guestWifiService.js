@@ -8,7 +8,7 @@ class GuestWifiService {
       .leftJoin('employees', 'guest_wifi_accounts.requested_by_employee_id', 'employees.id')
       .select(
         'guest_wifi_accounts.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as requested_by_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as requested_by_name")
       )
       .whereNull('guest_wifi_accounts.deleted_at');
 
@@ -58,7 +58,7 @@ class GuestWifiService {
       .leftJoin('employees', 'guest_wifi_accounts.requested_by_employee_id', 'employees.id')
       .select(
         'guest_wifi_accounts.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as requested_by_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as requested_by_name")
       )
       .where('guest_wifi_accounts.id', id)
       .whereNull('guest_wifi_accounts.deleted_at')

@@ -7,7 +7,7 @@ class WebsitesService {
       .leftJoin('employees', 'website_monitoring.admin_employee_id', 'employees.id')
       .select(
         'website_monitoring.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as admin_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as admin_name")
       )
       .whereNull('website_monitoring.deleted_at');
 
@@ -47,7 +47,7 @@ class WebsitesService {
       .leftJoin('employees', 'website_monitoring.admin_employee_id', 'employees.id')
       .select(
         'website_monitoring.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as admin_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as admin_name")
       )
       .where('website_monitoring.id', id)
       .whereNull('website_monitoring.deleted_at')

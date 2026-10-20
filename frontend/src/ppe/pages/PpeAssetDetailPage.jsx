@@ -282,6 +282,11 @@ export default function PpeAssetDetailPage() {
                 src={asset.image_path}
                 alt={asset.asset_name}
                 className="w-full h-48 object-cover rounded-xl border border-slate-200"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/nkb-logo.png';
+                  e.currentTarget.className = 'w-full h-32 object-contain p-4 bg-slate-50 rounded-xl border border-slate-200';
+                }}
               />
             </div>
           )}

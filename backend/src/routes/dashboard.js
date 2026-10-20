@@ -106,7 +106,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // Recent tickets
     const recentTickets = await db('tickets')
       .join('employees as req', 'tickets.requested_by_employee_id', 'req.id')
-      .select('tickets.id', 'tickets.ticket_number', 'tickets.subject', 'tickets.status', 'tickets.created_at', db.raw("concat(req.first_name, ' ', req.last_name) as requester_name"))
+      .select('tickets.id', 'tickets.ticket_number', 'tickets.subject', 'tickets.status', 'tickets.created_at', db.raw("(req.first_name || ' ' || req.last_name) as requester_name"))
       .orderBy('tickets.created_at', 'desc')
       .limit(5);
 
@@ -114,7 +114,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const recentAssignments = await db('asset_assignments')
       .join('assets', 'asset_assignments.asset_id', 'assets.id')
       .leftJoin('employees as emp', 'asset_assignments.employee_id', 'emp.id')
-      .select('asset_assignments.id', 'asset_assignments.assignment_number', 'assets.name as asset_name', 'asset_assignments.date_assigned', db.raw("concat(emp.first_name, ' ', emp.last_name) as employee_name"))
+      .select('asset_assignments.id', 'asset_assignments.assignment_number', 'assets.name as asset_name', 'asset_assignments.date_assigned', db.raw("(emp.first_name || ' ' || emp.last_name) as employee_name"))
       .orderBy('asset_assignments.created_at', 'desc')
       .limit(5);
 

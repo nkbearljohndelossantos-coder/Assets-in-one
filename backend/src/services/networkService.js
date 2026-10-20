@@ -381,7 +381,7 @@ class NetworkService {
       .leftJoin('departments', 'user_network_assignments.department_id', 'departments.id')
       .select(
         'user_network_assignments.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'employees.employee_number',
         'assets.name as asset_name',
         'assets.asset_code',
@@ -426,7 +426,7 @@ class NetworkService {
       .leftJoin('departments', 'user_network_assignments.department_id', 'departments.id')
       .select(
         'user_network_assignments.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'employees.employee_number',
         'assets.name as asset_name',
         'assets.asset_code',

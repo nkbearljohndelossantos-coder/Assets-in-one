@@ -7,7 +7,7 @@ class FileSharesService {
       .leftJoin('employees', 'file_shares.owner_employee_id', 'employees.id')
       .select(
         'file_shares.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as owner_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as owner_name")
       )
       .whereNull('file_shares.deleted_at');
 
@@ -43,7 +43,7 @@ class FileSharesService {
       .leftJoin('employees', 'file_shares.owner_employee_id', 'employees.id')
       .select(
         'file_shares.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as owner_name")
+        db.raw("(employees.first_name || ' ' || employees.last_name) as owner_name")
       )
       .where('file_shares.id', id)
       .whereNull('file_shares.deleted_at')
@@ -98,7 +98,7 @@ class FileSharesService {
       .leftJoin('departments', 'file_share_permissions.department_id', 'departments.id')
       .select(
         'file_share_permissions.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'departments.name as department_name'
       )
       .where('file_share_permissions.file_share_id', fileShareId)

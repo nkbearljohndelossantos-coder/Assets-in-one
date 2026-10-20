@@ -120,7 +120,7 @@ router.get('/devices', authenticateToken, requirePermission('remote_device.view'
       .select(
         'd.*',
         'dept.name as department_name',
-        db.raw("concat(e.first_name, ' ', e.last_name) as assigned_employee_name")
+        db.raw("(e.first_name || ' ' || e.last_name) as assigned_employee_name")
       );
 
     if (department_id) query = query.where('d.department_id', department_id);
@@ -152,7 +152,7 @@ router.get('/devices/:deviceId', authenticateToken, requirePermission('remote_de
       .select(
         'd.*',
         'dept.name as department_name',
-        db.raw("concat(e.first_name, ' ', e.last_name) as assigned_employee_name")
+        db.raw("(e.first_name || ' ' || e.last_name) as assigned_employee_name")
       )
       .where('d.device_id', deviceId)
       .first();

@@ -24,7 +24,7 @@ router.get('/', authenticateToken, requirePermission('assets.view'), async (req,
         'assets.name as asset_name',
         'assets.asset_code',
         'assets.serial_number',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'departments.name as department_name'
       );
 

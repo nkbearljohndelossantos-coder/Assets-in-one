@@ -130,7 +130,7 @@ router.get('/:id', authenticateToken, requirePermission('licenses.view'), async 
       .leftJoin('assets', 'license_assignments.asset_id', 'assets.id')
       .select(
         'license_assignments.*',
-        db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name"),
+        db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name"),
         'employees.employee_number',
         'assets.name as asset_name',
         'assets.asset_code'

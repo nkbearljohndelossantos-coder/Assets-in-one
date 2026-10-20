@@ -10,7 +10,7 @@ async function syncAssetsToManagedDevices() {
     const isSqlite = db.client.config.client === 'sqlite3';
     const concatEmpName = isSqlite 
       ? db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name") 
-      : db.raw("concat(employees.first_name, ' ', employees.last_name) as employee_name");
+      : db.raw("(employees.first_name || ' ' || employees.last_name) as employee_name");
 
     const assets = await db('assets')
       .leftJoin('asset_categories', 'assets.category_id', 'asset_categories.id')

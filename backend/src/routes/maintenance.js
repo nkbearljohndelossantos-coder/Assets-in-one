@@ -262,7 +262,7 @@ router.post('/:id/complete', authenticateToken, requirePermission('maintenance.c
 
       // 4. Update asset condition details
       await trx('assets').where('id', schedule.asset_id).update({
-        remarks: db.raw(`concat(remarks, ' [PM Completed on ', ?, ']')`, [completionDate]),
+        remarks: db.raw(`(COALESCE(remarks, '') || ' [PM Completed on ' || ? || ']')`, [completionDate]),
         updated_at: new Date()
       });
 

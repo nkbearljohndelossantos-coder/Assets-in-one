@@ -106,8 +106,28 @@ app.get(['/uploads/NKB-ITMS-Agent.apk', '/api/uploads/NKB-ITMS-Agent.apk', '/api
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Explicit 404 for missing upload files to prevent SPA fallback 422 errors
-app.use(['/uploads/*', '/api/uploads/*'], (req, res) => {
+// Clean SVG placeholder for missing images in uploads to prevent broken <img> boxes and console 404 errors
+const fallbackAssetSvg = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+    <rect width="400" height="300" fill="#f8fafc"/>
+    <rect x="150" y="85" width="100" height="85" rx="12" fill="#e2e8f0"/>
+    <path d="M175 140l15-20 20 25 15-15 15 20h-65z" fill="#94a3b8"/>
+    <circle cx="178" cy="112" r="8" fill="#94a3b8"/>
+    <text x="200" y="205" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#475569" text-anchor="middle">Photo Pending Upload</text>
+    <text x="200" y="225" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#94a3b8" text-anchor="middle">NKB Asset Registry</text>
+  </svg>`,
+  'utf-8'
+);
+
+// Fallback for missing upload files: return placeholder image for images, or 404 JSON for non-images
+app.use(['/uploads', '/api/uploads', '/uploads/*', '/api/uploads/*'], (req, res) => {
+  const targetUrl = req.originalUrl || req.url || req.path;
+  const isImage = /\.(jpg|jpeg|png|webp|svg|gif)$/i.test(targetUrl);
+  if (isImage) {
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(fallbackAssetSvg);
+  }
   res.status(404).json({ success: false, message: 'Requested upload file not found' });
 });
 
