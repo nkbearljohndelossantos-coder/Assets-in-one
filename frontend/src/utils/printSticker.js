@@ -1,0 +1,409 @@
+/**
+ * Universal Printable Property Asset Tag Sticker Generator
+ * Standardized 70mm x 40mm High-Visibility Asset Tag with Assignee / Owner
+ * Formatted for NKB Manufacturing Corp. Unified ITMS + PPE System
+ */
+
+export function getAssetOwnerText(asset, assignment) {
+  if (!asset) return 'UNASSIGNED / IN STORAGE';
+
+  // 1. Explicit active assignment passed
+  if (assignment?.employee_name && String(assignment.employee_name).trim()) {
+    const dept = assignment.department_name ? ` (${assignment.department_name})` : '';
+    return `${String(assignment.employee_name).trim()}${dept}`.toUpperCase();
+  }
+  if (assignment?.department_name && String(assignment.department_name).trim()) {
+    return `${String(assignment.department_name).trim()} (DEPT)`.toUpperCase();
+  }
+
+  // 2. Direct employee name on asset
+  if (asset.employee_name && String(asset.employee_name).trim()) {
+    const dept = asset.department_name ? ` (${asset.department_name})` : '';
+    return `${String(asset.employee_name).trim()}${dept}`.toUpperCase();
+  }
+  if (asset.assigned_to_name && String(asset.assigned_to_name).trim()) {
+    return String(asset.assigned_to_name).trim().toUpperCase();
+  }
+  if (asset.assigned_to && String(asset.assigned_to).trim()) {
+    return String(asset.assigned_to).trim().toUpperCase();
+  }
+  if (asset.assigned_employee_name && String(asset.assigned_employee_name).trim()) {
+    return String(asset.assigned_employee_name).trim().toUpperCase();
+  }
+  if (asset.current_holder && String(asset.current_holder).trim()) {
+    return String(asset.current_holder).trim().toUpperCase();
+  }
+  if (asset.custodian_name && String(asset.custodian_name).trim()) {
+    return String(asset.custodian_name).trim().toUpperCase();
+  }
+  if (asset.issued_to_name && String(asset.issued_to_name).trim()) {
+    return String(asset.issued_to_name).trim().toUpperCase();
+  }
+
+  // 3. Combined first + last name
+  if (asset.first_name || asset.last_name) {
+    const fullName = `${asset.first_name || ''} ${asset.last_name || ''}`.trim();
+    if (fullName) {
+      const dept = asset.department_name ? ` (${asset.department_name})` : '';
+      return `${fullName}${dept}`.toUpperCase();
+    }
+  }
+
+  // 4. Department only
+  if (asset.department_name && String(asset.department_name).trim()) {
+    return `${String(asset.department_name).trim()} (DEPT)`.toUpperCase();
+  }
+
+  // 5. String location like "Assigned to Sharmaine Santos"
+  if (asset.current_location && String(asset.current_location).toLowerCase().startsWith('assigned to ')) {
+    return String(asset.current_location).substring(12).trim().toUpperCase();
+  }
+
+  return 'UNASSIGNED / IN STORAGE';
+}
+
+export function getAssetModelText(asset) {
+  if (!asset) return '';
+  const brand = asset.brand || '';
+  const model = asset.model || '';
+  if (brand && model) return `${brand} ${model}`;
+  return model || brand || '';
+}
+
+export function getAssetSpecsText(asset) {
+  if (!asset) return '';
+
+  // Radio specs
+  if (asset.radio_frequency_band || asset.radio_channel_count || asset.call_sign) {
+    const radioSpecs = [
+      asset.radio_frequency_band && `Freq: ${asset.radio_frequency_band}`,
+      asset.radio_channel_count && `Channels: ${asset.radio_channel_count}`,
+      asset.radio_power_output && `Power: ${asset.radio_power_output}`,
+      asset.call_sign && `Callsign: ${asset.call_sign}`
+    ].filter(Boolean);
+    if (radioSpecs.length > 0) return radioSpecs.join(' | ');
+  }
+
+  // IT hardware specs
+  const hardwareSpecs = [
+    asset.specs_cpu && `CPU: ${asset.specs_cpu}`,
+    asset.specs_ram && `RAM: ${asset.specs_ram}`,
+    asset.specs_storage && `Storage: ${asset.specs_storage}`,
+    (asset.specs_os || asset.specs_win_edition) && `OS: ${asset.specs_os || ''} ${asset.specs_win_edition || ''}`.trim()
+  ].filter(Boolean);
+
+  if (hardwareSpecs.length > 0) {
+    return hardwareSpecs.join(' | ');
+  }
+
+  // PPE / Equipment specs
+  const ppeSpecs = [
+    asset.size && `Size: ${asset.size}`,
+    asset.color && `Color: ${asset.color}`,
+    asset.standard_compliance && `Std: ${asset.standard_compliance}`,
+    asset.material && `Material: ${asset.material}`
+  ].filter(Boolean);
+
+  if (ppeSpecs.length > 0) {
+    return ppeSpecs.join(' | ');
+  }
+
+  return asset.description || asset.remarks || asset.notes || '';
+}
+
+/**
+ * Trigger browser print modal for standardized 70mm x 40mm Property Asset Tag
+ */
+export function printAssetSticker(asset, options = {}) {
+  if (!asset) return;
+
+  const printWindow = window.open('', '_blank', 'width=700,height=500');
+  if (!printWindow) {
+    alert('Please allow popups to print asset sticker.');
+    return;
+  }
+
+  const logoUrl = `${window.location.origin}/nkb-logo.png`;
+  const assetCode = asset.asset_code || asset.code || 'AST-NKB-000000';
+  const assetName = (asset.name || asset.asset_name || asset.model || 'PHYSICAL ASSET').toUpperCase();
+  const modelText = getAssetModelText(asset);
+  const specsText = getAssetSpecsText(asset);
+  const assignedTo = getAssetOwnerText(asset, options.assignment);
+
+  // Determine category display
+  let category = asset.category_name || asset.category;
+  if (!category) {
+    if (asset.call_sign || asset.radio_frequency_band) {
+      category = 'TWO-WAY RADIO / WALKIE-TALKIE';
+    } else {
+      category = 'EQUIPMENT';
+    }
+  }
+  category = String(category).toUpperCase();
+
+  // Serial / Batch number
+  const serialNumber = (asset.serial_number || asset.batch_number || asset.barcode || 'N/A').toUpperCase();
+
+  // Condition
+  let condition = (asset.condition || asset.status || 'GOOD').toUpperCase();
+  if (condition === 'ACTIVE') condition = 'GOOD / FUNCTIONAL';
+
+  // Construct Model & Hardware Specs line
+  let specsContent = '';
+  if (modelText && specsText) {
+    specsContent = `Model: ${modelText} &nbsp;|&nbsp; ${specsText}`;
+  } else if (modelText) {
+    specsContent = `Model: ${modelText}`;
+  } else if (specsText) {
+    specsContent = `Specs: ${specsText}`;
+  } else {
+    specsContent = 'Standard NKB Enterprise Hardware Specification';
+  }
+
+  const systemSubtitle = options.systemSubtitle || 'IT MANAGEMENT SYSTEM';
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Property Asset Tag - ${assetCode}</title>
+        <style>
+          @page {
+            size: 70mm 40mm;
+            margin: 0mm;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          html, body {
+            width: 70mm;
+            height: 40mm;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif;
+            background: #ffffff;
+            color: #000000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            overflow: hidden;
+          }
+          .sticker-card {
+            width: 70mm;
+            height: 40mm;
+            padding: 1.8mm 2.2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border: 1.5px solid #000000;
+            box-sizing: border-box;
+            background: #ffffff;
+            overflow: hidden;
+          }
+          .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.2px solid #000000;
+            padding-bottom: 0.8mm;
+          }
+          .logo-img {
+            height: 6.5mm;
+            max-width: 34mm;
+            object-fit: contain;
+          }
+          .asset-tag-badge {
+            text-align: right;
+          }
+          .asset-tag-title {
+            font-size: 4.8pt;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #333333;
+            text-transform: uppercase;
+            line-height: 1;
+          }
+          .asset-tag-code {
+            font-size: 8.8pt;
+            font-weight: 900;
+            color: #000000;
+            font-family: monospace, Arial, sans-serif;
+            line-height: 1.1;
+          }
+          .main-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden;
+            padding: 0.6mm 0;
+          }
+          .name-block {
+            margin-bottom: 0.4mm;
+          }
+          .field-label {
+            font-size: 5pt;
+            font-weight: 800;
+            color: #333333;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            line-height: 1;
+          }
+          .name-val {
+            font-size: 9pt;
+            font-weight: 900;
+            color: #000000;
+            line-height: 1.05;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .specs-block {
+            background: #f1f5f9;
+            border-left: 2.5px solid #000000;
+            padding: 0.4mm 1mm;
+            margin: 0.4mm 0;
+          }
+          .specs-title {
+            font-size: 4.5pt;
+            font-weight: 800;
+            color: #333333;
+            text-transform: uppercase;
+            margin-bottom: 0.2mm;
+            line-height: 1;
+          }
+          .specs-val {
+            font-size: 5pt;
+            font-weight: 700;
+            color: #000000;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .details-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 1mm;
+            margin: 0.3mm 0;
+          }
+          .grid-col {
+            flex: 1;
+            min-width: 0;
+          }
+          .grid-val {
+            font-size: 6pt;
+            font-weight: 900;
+            color: #000000;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.1;
+          }
+          .assigned-row {
+            border-top: 0.9px solid #000000;
+            padding-top: 0.4mm;
+            font-size: 6pt;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .assigned-title {
+            font-weight: 900;
+            color: #000000;
+            margin-right: 0.8mm;
+          }
+          .assigned-name {
+            font-weight: 900;
+            color: #000000;
+          }
+          .footer-banner {
+            border-top: 1px solid #000000;
+            padding-top: 0.4mm;
+            text-align: center;
+          }
+          .footer-main {
+            font-size: 5.8pt;
+            font-weight: 900;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            line-height: 1;
+          }
+          .footer-sub {
+            font-size: 4.2pt;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            margin-top: 0.2mm;
+            text-transform: uppercase;
+            line-height: 1;
+            color: #222222;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sticker-card">
+          <div class="header-row">
+            <img src="${logoUrl}" alt="NKB Logo" class="logo-img" />
+            <div class="asset-tag-badge">
+              <div class="asset-tag-title">PROPERTY ASSET TAG</div>
+              <div class="asset-tag-code">${assetCode}</div>
+            </div>
+          </div>
+
+          <div class="main-body">
+            <div class="name-block">
+              <div class="field-label">ASSET NAME :</div>
+              <div class="name-val">${assetName}</div>
+            </div>
+
+            <div class="specs-block">
+              <div class="specs-title">MODEL & HARDWARE SPECS :</div>
+              <div class="specs-val">${specsContent}</div>
+            </div>
+
+            <div class="details-grid">
+              <div class="grid-col">
+                <div class="field-label">CATEGORY</div>
+                <div class="grid-val">${category}</div>
+              </div>
+              <div class="grid-col">
+                <div class="field-label">SERIAL NUMBER</div>
+                <div class="grid-val">${serialNumber}</div>
+              </div>
+              <div class="grid-col">
+                <div class="field-label">CONDITION</div>
+                <div class="grid-val">${condition}</div>
+              </div>
+            </div>
+
+            <div class="assigned-row">
+              <span class="assigned-title">ASSIGNED TO:</span>
+              <span class="assigned-name">${assignedTo}</span>
+            </div>
+          </div>
+
+          <div class="footer-banner">
+            <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
+            <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; ${systemSubtitle}</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.close();
+            }, 350);
+          };
+        </script>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+}

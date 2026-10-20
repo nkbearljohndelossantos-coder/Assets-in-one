@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import ImageZoomModal from '../components/ImageZoomModal';
 import { optimizeImageQuality } from '../utils/imageOptimizer';
+import { printAssetSticker } from '../utils/printSticker';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -186,44 +187,9 @@ export default function Assets() {
     }
   };
 
-  const handleQuickPrintQR = (asset, e) => {
+  const handlePrintSticker = (asset, e) => {
     if (e) e.stopPropagation();
-    const printWindow = window.open('', '_blank');
-    const scanUrl = `${window.location.origin}/scan/${asset.asset_code}`;
-    const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR Specs Sticker - ${asset.asset_code}</title>
-          <style>
-            @page { size: 50mm 50mm; margin: 0mm; }
-            * { box-sizing: border-box; }
-            html, body {
-              width: 50mm; height: 50mm; margin: 0; padding: 2mm;
-              font-family: Arial, sans-serif; background: #ffffff; color: #000000;
-              display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-              text-align: center; overflow: hidden;
-            }
-            .header { font-size: 6.5pt; font-weight: 900; letter-spacing: 0.5px; border-bottom: 1px solid #000; padding-bottom: 1mm; margin-bottom: 1mm; width: 100%; text-transform: uppercase; }
-            .qr-box { flex: 1; display: flex; align-items: center; justify-content: center; margin: 1mm 0; }
-            .qr-img { width: 32mm; height: 32mm; object-fit: contain; }
-            .code { font-size: 9pt; font-weight: 900; font-family: monospace, Arial; margin-top: 0.5mm; }
-            .footer { font-size: 5pt; font-weight: 800; color: #333; margin-top: 0.5mm; }
-          </style>
-        </head>
-        <body onload="window.print(); window.close();">
-          <div class="header">🛡️ NKB IT ASSET SPECIFICATIONS</div>
-          <div class="qr-box">
-            <img src="${qrImgUrl}" class="qr-img" alt="Asset Specs QR" />
-          </div>
-          <div class="code">${asset.asset_code}</div>
-          <div class="footer">SCAN CAMERA FOR SPECS 📱</div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    printAssetSticker(asset);
   };
 
   useEffect(() => {
@@ -540,12 +506,12 @@ export default function Assets() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={(e) => handleQuickPrintQR(asset, e)}
-                      className="text-blue-700 hover:text-blue-900 bg-blue-50 border border-blue-200 font-bold flex items-center gap-1 cursor-pointer px-2 py-1 rounded text-[9.5px] transition-colors shadow-xs"
-                      title="Print 1-Click QR Code Specs Sticker"
+                      onClick={(e) => handlePrintSticker(asset, e)}
+                      className="text-slate-800 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-300 font-bold flex items-center gap-1 cursor-pointer px-2 py-1 rounded text-[9.5px] transition-colors shadow-xs"
+                      title="Print 70mm x 40mm Property Asset Tag Sticker"
                     >
-                      <Printer className="h-3 w-3" />
-                      <span>Print QR</span>
+                      <Printer className="h-3 w-3 text-slate-700" />
+                      <span>Print Sticker</span>
                     </button>
                     {hasPermission('assets.update') && (
                       <button

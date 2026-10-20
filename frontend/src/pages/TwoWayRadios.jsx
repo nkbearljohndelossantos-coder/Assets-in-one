@@ -9,6 +9,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { printAssetSticker } from '../utils/printSticker';
 
 const radioSchema = z.object({
   name: z.string().min(1, 'Radio name/label is required'),
@@ -173,122 +174,9 @@ export default function TwoWayRadios() {
     }
   };
 
-  // Sticker Print Functionality for Two-Way Radios
+  // Sticker Print Functionality for Two-Way Radios (Standardized 70mm x 40mm Property Asset Tag)
   const handlePrintSticker = (asset) => {
-    const printWindow = window.open('', '_blank', 'width=600,height=500');
-    if (!printWindow) {
-      showToast('Popup Blocked', 'Please allow popups to print asset sticker.', 'warning');
-      return;
-    }
-
-    const qrData = encodeURIComponent(`NKB-ITMS:ASSET:${asset.asset_code}`);
-    const barcodeData = encodeURIComponent(asset.asset_code);
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Radio Sticker - ${asset.asset_code}</title>
-          <style>
-            @page {
-              size: 2in 1in;
-              margin: 0;
-            }
-            body {
-              font-family: Arial, sans-serif;
-              margin: 0;
-              padding: 4px;
-              width: 2in;
-              height: 1in;
-              box-sizing: border-box;
-              background: #fff;
-              color: #000;
-              font-size: 7pt;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-            }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 1px solid #000;
-              padding-bottom: 1px;
-            }
-            .title {
-              font-weight: 900;
-              font-size: 6pt;
-              letter-spacing: 0.5px;
-            }
-            .code {
-              font-weight: 900;
-              font-size: 7.5pt;
-              font-family: monospace;
-            }
-            .body-grid {
-              display: flex;
-              gap: 3px;
-              align-items: center;
-              margin-top: 1px;
-            }
-            .details {
-              flex: 1;
-              line-height: 1.1;
-            }
-            .callsign {
-              font-weight: 900;
-              font-size: 8pt;
-              color: #000;
-              background: #eee;
-              padding: 1px 3px;
-              border-radius: 2px;
-              display: inline-block;
-            }
-            .freq {
-              font-size: 5.5pt;
-              color: #333;
-              font-weight: bold;
-            }
-            .qr-img {
-              width: 0.55in;
-              height: 0.55in;
-            }
-            .footer {
-              border-top: 1px dashed #666;
-              padding-top: 1px;
-              display: flex;
-              justify-content: space-between;
-              font-size: 5pt;
-              font-weight: bold;
-            }
-          </style>
-        </head>
-        <body onload="window.print(); window.close();">
-          <div class="header">
-            <span class="title">📻 NKB TWO-WAY RADIO</span>
-            <span class="code">${asset.asset_code}</span>
-          </div>
-
-          <div class="body-grid">
-            <div class="details">
-              <div class="callsign">${asset.call_sign || asset.name}</div>
-              <div class="freq">FREQ: ${asset.radio_frequency_band || 'UHF/VHF'}</div>
-              <div class="freq">S/N: <strong>${asset.serial_number}</strong></div>
-              ${asset.license_number ? `<div class="freq">NTC: ${asset.license_number}</div>` : ''}
-            </div>
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrData}" class="qr-img" alt="QR" />
-          </div>
-
-          <div class="footer">
-            <span>MODEL: ${asset.model}</span>
-            <span>NKB ENTERPRISE SECURITY</span>
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    printAssetSticker(asset);
   };
 
   return (
@@ -428,10 +316,10 @@ export default function TwoWayRadios() {
                     handlePrintSticker(radio);
                   }}
                   className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                  title="Print 2x1 Inch Physical Barcode & QR Label Sticker"
+                  title="Print 70mm x 40mm Property Asset Tag Sticker"
                 >
                   <Printer className="h-3 w-3" />
-                  <span>Print 2"x1" Sticker</span>
+                  <span>Print Sticker</span>
                 </button>
 
                 <div className="flex items-center gap-2">

@@ -7,8 +7,9 @@ import { useIsMobile } from '../hooks/useDeviceType';
 import { CameraCapture } from '../components/CameraCapture';
 import { 
   Building2, Plus, Search, Filter, Download, QrCode, 
-  RotateCcw, Eye, Edit2, Trash2, Camera, Layers, CheckCircle, AlertTriangle
+  RotateCcw, Eye, Edit2, Trash2, Camera, Layers, CheckCircle, AlertTriangle, Printer
 } from 'lucide-react';
+import { printAssetSticker } from '../../utils/printSticker';
 
 function fmtMoney(n) {
   const v = Number(n || 0);
@@ -532,6 +533,13 @@ export default function PpeAssetsPage() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => printAssetSticker(a, { systemSubtitle: 'UNIFIED ASSET SYSTEM' })}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
+                            title="Print Property Asset Tag Sticker"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
                           <Link
                             to={`/ppe/assets/${a.id}`}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"

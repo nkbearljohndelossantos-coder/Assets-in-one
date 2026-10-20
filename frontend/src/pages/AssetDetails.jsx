@@ -10,6 +10,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { ZoomableImage } from '../components/ImageZoomModal';
 import { optimizeImageQuality, convertFileToBase64 } from '../utils/imageOptimizer';
+import { printAssetSticker, getAssetOwnerText, getAssetModelText, getAssetSpecsText } from '../utils/printSticker';
 
 export default function AssetDetails() {
   const { id } = useParams();
@@ -352,6 +353,8 @@ export default function AssetDetails() {
     const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
 
     if (mode === 'qr_only') {
+      const scanUrl = `${window.location.origin}/scan/${asset.asset_code}`;
+      const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -387,247 +390,8 @@ export default function AssetDetails() {
       return;
     }
 
-    const modelText = getAssetModelText();
-    const specsText = getAssetSpecsText();
-    const assignedToText = getAssignedToText();
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Asset Sticker - ${asset.asset_code}</title>
-          <style>
-            @page {
-              size: 70mm 40mm;
-              margin: 0mm;
-            }
-            * {
-              box-sizing: border-box;
-            }
-            html, body {
-              width: 70mm;
-              height: 40mm;
-              margin: 0;
-              padding: 0;
-              font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
-              background: #ffffff;
-              color: #000000;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-              overflow: hidden;
-            }
-            .sticker-card {
-              width: 70mm;
-              height: 40mm;
-              padding: 1.8mm 2.5mm;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              border: 1.5px solid #000000;
-              box-sizing: border-box;
-              overflow: hidden;
-              background: #ffffff;
-            }
-            .header-row {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 1.2px solid #000000;
-              padding-bottom: 0.8mm;
-              margin-bottom: 0.8mm;
-            }
-            .logo-img {
-              height: 6.5mm;
-              max-width: 36mm;
-              object-fit: contain;
-            }
-            .asset-tag-badge {
-              text-align: right;
-            }
-            .asset-tag-title {
-              font-size: 4.8pt;
-              font-weight: 800;
-              letter-spacing: 0.4px;
-              color: #333333;
-              text-transform: uppercase;
-              line-height: 1;
-            }
-            .asset-tag-code {
-              font-size: 8.5pt;
-              font-weight: 900;
-              color: #000000;
-              font-family: monospace, Arial, sans-serif;
-              line-height: 1.1;
-            }
-            .main-body {
-              flex: 1;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              overflow: hidden;
-            }
-            .name-block {
-              margin-bottom: 0.6mm;
-            }
-            .field-label {
-              font-size: 5pt;
-              font-weight: 800;
-              color: #333333;
-              text-transform: uppercase;
-              letter-spacing: 0.3px;
-              line-height: 1;
-            }
-            .name-val {
-              font-size: 9.5pt;
-              font-weight: 900;
-              color: #000000;
-              line-height: 1.05;
-              text-transform: uppercase;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-            }
-            .specs-block {
-              background: #f1f5f9;
-              border-left: 2px solid #000000;
-              padding: 0.4mm 1mm;
-              margin-bottom: 0.5mm;
-            }
-            .specs-val {
-              font-size: 4.8pt;
-              font-weight: 700;
-              color: #000000;
-              line-height: 1.1;
-              max-height: 3.8mm;
-              overflow: hidden;
-            }
-            .details-grid {
-              display: flex;
-              justify-content: space-between;
-              gap: 1mm;
-              margin-bottom: 0.4mm;
-            }
-            .grid-col {
-              flex: 1;
-              min-width: 0;
-            }
-            .grid-val {
-              font-size: 6.2pt;
-              font-weight: 900;
-              color: #000000;
-              text-transform: uppercase;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              line-height: 1.1;
-            }
-            .location-row {
-              border-top: 0.8px solid #000000;
-              padding-top: 0.4mm;
-              margin-bottom: 0.4mm;
-              font-size: 5.8pt;
-              line-height: 1.1;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-            }
-            .location-title {
-              font-weight: 900;
-              margin-right: 0.8mm;
-            }
-            .location-text {
-              font-weight: 800;
-              color: #000000;
-            }
-            .footer-banner {
-              border-top: 1px solid #000000;
-              padding-top: 0.4mm;
-              text-align: center;
-            }
-            .footer-main {
-              font-size: 6pt;
-              font-weight: 900;
-              letter-spacing: 0.4px;
-              text-transform: uppercase;
-              line-height: 1;
-            }
-            .footer-sub {
-              font-size: 4.5pt;
-              font-weight: 800;
-              letter-spacing: 0.2px;
-              margin-top: 0.2mm;
-              text-transform: uppercase;
-              line-height: 1;
-              color: #222222;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="sticker-card">
-            <div class="header-row">
-              <img src="${logoUrl}" alt="NKB Logo" class="logo-img" />
-              <div class="asset-tag-badge">
-                <div class="asset-tag-title">PROPERTY ASSET TAG</div>
-                <div class="asset-tag-code">${asset.asset_code}</div>
-              </div>
-            </div>
-
-            <div class="main-body">
-              <div class="name-block">
-                <div class="field-label">Asset Name :</div>
-                <div class="name-val">${asset.name || modelText}</div>
-              </div>
-
-              ${(modelText || specsText) ? `
-              <div class="specs-block">
-                <div class="field-label" style="font-size: 4.5pt; margin-bottom: 0.2mm;">Model & Specs :</div>
-                <div class="specs-val">
-                  ${modelText ? `<strong>Model:</strong> ${modelText}` : ''}
-                  ${(modelText && specsText) ? ' | ' : ''}
-                  ${specsText ? `<strong>Specs:</strong> ${specsText}` : ''}
-                </div>
-              </div>
-              ` : ''}
-
-              <div class="details-grid">
-                <div class="grid-col">
-                  <div class="field-label">Category</div>
-                  <div class="grid-val">${(asset.category_name || 'EQUIPMENT').toUpperCase()}</div>
-                </div>
-                <div class="grid-col">
-                  <div class="field-label">Serial Number</div>
-                  <div class="grid-val">${asset.serial_number || 'N/A'}</div>
-                </div>
-                <div class="grid-col">
-                  <div class="field-label">Condition</div>
-                  <div class="grid-val">${(asset.condition || 'GOOD').toUpperCase()}</div>
-                </div>
-              </div>
-
-              <div class="location-row">
-                <span class="location-title">ASSIGNED TO:</span>
-                <span class="location-text">${assignedToText.toUpperCase()}</span>
-              </div>
-            </div>
-
-            <div class="footer-banner">
-              <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
-              <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; IT MANAGEMENT SYSTEM</div>
-            </div>
-          </div>
-
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-                window.close();
-              }, 400);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    printWindow.close();
+    printAssetSticker(asset, { assignment: activeAssignment });
   };
 
   if (loading) {
@@ -1705,7 +1469,7 @@ export default function AssetDetails() {
                       <div className="border-t border-black/80 pt-1 text-[8.5px] leading-tight truncate">
                         <span className="font-black mr-1 uppercase">ASSIGNED TO:</span>
                         <span className="font-bold text-black uppercase">
-                          {getAssignedToText()}
+                          {getAssetOwnerText(asset, activeAssignment)}
                         </span>
                       </div>
                     </div>

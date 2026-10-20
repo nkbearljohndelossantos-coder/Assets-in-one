@@ -7,6 +7,7 @@ import {
   Building2, ArrowLeft, Calendar, DollarSign, Wrench, QrCode, 
   Printer, Download, Plus, Edit2, Trash2, CheckCircle, AlertTriangle, Shield
 } from 'lucide-react';
+import { printAssetSticker } from '../../utils/printSticker';
 
 function fmtMoney(n) {
   const v = Number(n || 0);
@@ -266,11 +267,12 @@ export default function PpeAssetDetailPage() {
                 <span>Save PNG</span>
               </a>
               <button
-                onClick={() => window.print()}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                onClick={() => printAssetSticker(asset, { systemSubtitle: 'UNIFIED ASSET SYSTEM' })}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                title="Print 70mm x 40mm Property Asset Tag Sticker"
               >
                 <Printer className="h-3.5 w-3.5" />
-                <span>Print Label</span>
+                <span>Print Sticker</span>
               </button>
             </div>
           </div>
