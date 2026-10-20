@@ -159,15 +159,17 @@ export default function Layout() {
       <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-slate-200 border-r border-slate-800 select-none">
         {/* Sidebar Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 bg-slate-950 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md shadow-emerald-900/40">
-              UP
+          <Link to="/" className="flex items-center gap-3 group">
+            <img 
+              src="/nkb-logo.png" 
+              alt="NKB Assets" 
+              className="h-10 w-auto max-w-[44px] object-contain drop-shadow transition-transform group-hover:scale-105" 
+            />
+            <div className="min-w-0">
+              <span className="font-bold text-sm tracking-wide text-white block truncate">NKB ASSETS</span>
+              <span className="text-[10px] text-amber-400/90 block tracking-wider uppercase font-semibold">Unified ITMS+PPE</span>
             </div>
-            <div>
-              <span className="font-bold text-sm tracking-wide text-white block">UNIFIED ITMS+PPE</span>
-              <span className="text-[10px] text-slate-400 block tracking-wider uppercase font-semibold">Enterprise Suite</span>
-            </div>
-          </div>
+          </Link>
         </div>
 
         {/* Navigation list */}
@@ -258,13 +260,14 @@ export default function Layout() {
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex bg-black/50 animate-fade-in" onClick={() => setMobileMenuOpen(false)}>
           <aside className="w-64 bg-slate-900 flex flex-col animate-slide-right h-full" onClick={e => e.stopPropagation()}>
-            <div className="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white">
-                  UP
+            <div className="h-16 flex items-center justify-between px-4 bg-slate-950 border-b border-slate-800">
+              <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2.5">
+                <img src="/nkb-logo.png" alt="NKB Assets" className="h-9 w-auto object-contain drop-shadow" />
+                <div>
+                  <span className="font-bold text-sm text-white block">NKB ASSETS</span>
+                  <span className="text-[10px] text-amber-400/90 block uppercase font-semibold">Unified ITMS+PPE</span>
                 </div>
-                <span className="font-bold text-sm text-white">Unified ITMS+PPE</span>
-              </div>
+              </Link>
               <button onClick={() => setMobileMenuOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="h-6 w-6" />
               </button>
@@ -367,7 +370,16 @@ export default function Layout() {
               <Menu className="h-6 w-6" />
             </button>
             
+            {/* Mobile Brand */}
+            <div className="lg:hidden flex items-center gap-2">
+              <img src="/nkb-logo.png" alt="NKB Assets" className="h-7 w-auto object-contain" />
+              <span className="font-bold text-sm text-slate-900">NKB Assets</span>
+            </div>
+            
+            {/* Desktop Brand / Title */}
             <div className="hidden lg:flex items-center gap-3 select-none">
+              <img src="/nkb-logo.png" alt="NKB Assets" className="h-8 w-auto object-contain drop-shadow-sm" />
+              <div className="h-4 w-px bg-slate-300" />
               <span className="text-slate-900 font-bold text-base">Unified ITMS + PPE Enterprise System</span>
               <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Production Release v1.0

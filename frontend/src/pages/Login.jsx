@@ -64,8 +64,14 @@ export default function Login() {
       <div className="max-w-md w-full bg-white/95 backdrop-blur-md p-8 rounded-2xl shadow-2xl border border-slate-200/50">
         
         {/* Branding Headers */}
-        <div className="text-center mb-8 flex flex-col items-center">
-          <img src="/nkb-logo.png" alt="NKB IT Management System" className="w-64 h-auto drop-shadow-xl" />
+        <div className="text-center mb-6 flex flex-col items-center">
+          <img 
+            src="/nkb-logo.png" 
+            alt="NKB Manufacturing Corp. - Assets" 
+            className="w-48 sm:w-56 h-auto drop-shadow-md transition-transform hover:scale-105 duration-200" 
+          />
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight mt-3">Unified Assets & Operations</h1>
+          <p className="text-xs text-slate-500 font-medium">IT Management & Personal Protective Equipment</p>
         </div>
 
         {errorMsg && (
