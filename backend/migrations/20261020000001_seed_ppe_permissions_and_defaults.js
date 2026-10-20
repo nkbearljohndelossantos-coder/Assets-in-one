@@ -86,30 +86,7 @@ exports.up = async function(knex) {
     }
   }
 
-  // 4. Returnable Containers sample entries
-  const containers = [
-    { container_code: 'CNT-2026-0001', container_type: 'Steel Drum 200L', description: 'Reinforced 200L steel storage drum for chemical solvents', barcode: 'BC-CNT-001', status: 'AVAILABLE', location: 'Warehouse A - Chemical Bay' },
-    { container_code: 'CNT-2026-0002', container_type: 'IBC Tote 1000L', description: '1000L intermediate bulk container on galvanized steel pallet', barcode: 'BC-CNT-002', status: 'CHECKED_OUT', current_holder: 'Production Line 2', location: 'Factory Floor Bay 4' },
-    { container_code: 'CNT-2026-0003', container_type: 'Heavy Industrial Crate', description: 'High-density polyethylene returnable transport crate', barcode: 'BC-CNT-003', status: 'IN_TRANSIT', current_holder: 'Logistics Courier', location: 'Transit to Plant B' },
-    { container_code: 'CNT-2026-0004', container_type: 'Gas Cylinder 50L', description: 'High pressure argon gas industrial cylinder', barcode: 'BC-CNT-004', status: 'AVAILABLE', location: 'Gas Storage Facility' }
-  ];
-
-  for (const c of containers) {
-    const existing = await knex('ppe_returnable_containers').where({ container_code: c.container_code }).first();
-    if (!existing) {
-      const [newId] = await knex('ppe_returnable_containers').insert(c);
-      const containerId = typeof newId === 'object' ? newId.id : newId;
-      // Add initial check-in movement
-      await knex('ppe_container_movements').insert({
-        container_id: containerId,
-        action: 'CHECK_IN',
-        from_location: 'Supplier Intake',
-        to_location: c.location,
-        released_to: c.current_holder || 'Inventory Custodian',
-        notes: 'Initial registration and quality check'
-      });
-    }
-  }
+  // 4. Returnable Containers (Demo sample entries removed for production)
 };
 
 exports.down = async function(knex) {

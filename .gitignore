@@ -26,3 +26,8 @@ backend/data/*.sqlite-wal
 # OS files
 .DS_Store
 Thumbs.db
+
+# Scratch and deployment helper scripts containing host credentials
+scripts/*.py
+scripts/__pycache__/
+scripts/*.template
