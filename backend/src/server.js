@@ -44,6 +44,9 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// Trust reverse proxy (Nginx) for accurate client IP identification in rate limiters
+app.set('trust proxy', 1);
+
 // 3. Rate Limiters
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
