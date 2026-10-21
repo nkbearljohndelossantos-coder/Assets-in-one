@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useIsMobile } from '../hooks/useDeviceType';
 import { CameraCapture } from '../components/CameraCapture';
+import GlAccountSelect from '../components/GlAccountSelect';
 import { 
   Building2, Plus, Search, Filter, Download, QrCode, 
   RotateCcw, Eye, Edit2, Trash2, Camera, Layers, CheckCircle, AlertTriangle, Printer
@@ -138,13 +139,12 @@ function AssetForm({ onClose, onCreated, onUpdated, asset, categories }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">GL Account Code</label>
-              <input
-                type="text"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                placeholder="e.g. 1510 (Machinery)"
+              <label className="block text-xs font-semibold text-slate-700 mb-1">GL Account</label>
+              <GlAccountSelect
                 value={form.glAccount}
-                onChange={(e) => setForm({ ...form, glAccount: e.target.value })}
+                onChange={(code) => setForm({ ...form, glAccount: code })}
+                valueKey="code"
+                placeholder="Select GL Account..."
               />
             </div>
 

@@ -4,6 +4,7 @@ import {
   BookOpen, Plus, RefreshCw, DollarSign, Calendar, CheckCircle2, 
   AlertCircle, ChevronRight, X, ArrowUpRight, ArrowDownLeft, FileText, Layers
 } from 'lucide-react';
+import GlAccountSelect from '../components/GlAccountSelect';
 
 export default function PpeAccountingPage() {
   const [activeTab, setActiveTab] = useState('journals'); // 'journals' | 'accounts'
@@ -534,19 +535,16 @@ export default function PpeAccountingPage() {
                 <div className="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
                   {journalForm.lines.map((line, idx) => (
                     <div key={idx} className="flex flex-col sm:flex-row items-center gap-2">
-                      <select
-                        required
+                      <GlAccountSelect
                         value={line.accountId}
-                        onChange={(e) => updateJournalLine(idx, 'accountId', e.target.value)}
-                        className="text-xs border border-slate-300 rounded-lg px-2 py-2 flex-1 w-full bg-white"
-                      >
-                        <option value="">Select GL Account *</option>
-                        {accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.code} - {acc.name} ({acc.type})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => updateJournalLine(idx, 'accountId', id)}
+                        accounts={accounts}
+                        valueKey="id"
+                        size="sm"
+                        required
+                        placeholder="Select GL Account *"
+                        className="flex-1 w-full"
+                      />
 
                       <input
                         type="number"
