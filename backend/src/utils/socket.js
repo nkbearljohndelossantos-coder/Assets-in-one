@@ -13,7 +13,12 @@ let ioInstance = null;
 function init(httpServer) {
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin || origin.includes('nkbmanufacturing.com') || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('192.168.')) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
       methods: ['GET', 'POST'],
       credentials: true
     }

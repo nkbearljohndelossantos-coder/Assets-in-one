@@ -14,9 +14,15 @@ export const connectSocket = (token, onNotificationReceived) => {
 
   // Socket connection (uses Vite dev proxy or current domain)
   socket = io('/', {
-    auth: { token },
+    auth: (cb) => {
+      const activeToken = localStorage.getItem('accessToken') || localStorage.getItem('token') || token;
+      cb({ token: activeToken });
+    },
     transports: ['websocket', 'polling'],
-    autoConnect: true
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000
   });
 
   socket.on('connect', () => {
@@ -29,8 +35,27 @@ export const connectSocket = (token, onNotificationReceived) => {
     }
   });
 
-  socket.on('connect_error', (err) => {
-    if (err.message === 'Invalid token' || err.message === 'Authentication token required' || err.message.includes('timeout')) {
+  socket.on('connect_error', async (err) => {
+    if (err.message === 'Invalid token' || err.message === 'Authentication token required') {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const res = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+          });
+          const data = await res.json();
+          if (data && data.success && data.data?.accessToken) {
+            localStorage.setItem('accessToken', data.data.accessToken);
+            socket.auth = { token: data.data.accessToken };
+            socket.connect();
+            return;
+          }
+        } catch {
+          // Token refresh failed
+        }
+      }
       console.warn('Socket authentication token expired or invalid. Disconnecting socket until re-login.');
       if (socket) socket.disconnect();
     } else {
