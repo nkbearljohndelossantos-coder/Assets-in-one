@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -105,6 +105,40 @@ export default function Layout() {
     return null;
   }).filter(item => item !== null && (!item.isDropdown || item.items.length > 0));
 
+  /**
+   * Evaluates exact route matching for standalone roots ('/', '/ppe')
+   * and prefix route matching strictly for child routes (e.g. '/ppe/assets/:id')
+   */
+  const isRouteActive = (itemPath, currentPath) => {
+    if (!itemPath || !currentPath) return false;
+    const normCurrent = currentPath.length > 1 && currentPath.endsWith('/') 
+      ? currentPath.slice(0, -1) 
+      : currentPath;
+    const normItem = itemPath.length > 1 && itemPath.endsWith('/') 
+      ? itemPath.slice(0, -1) 
+      : itemPath;
+
+    // Exact route match
+    if (normCurrent === normItem) return true;
+
+    // Standalone dashboard routes require exact match only
+    if (normItem === '/' || normItem === '/ppe') {
+      return false;
+    }
+
+    // Child route match: must be followed by a path separator '/'
+    return normCurrent.startsWith(`${normItem}/`);
+  };
+
+  // Keep dropdown group expanded if user is on any of its child routes
+  useEffect(() => {
+    filteredMenu.forEach(item => {
+      if (item.isDropdown && item.items.some(sub => isRouteActive(sub.path, location.pathname))) {
+        setDropdowns(prev => (prev[item.name] ? prev : { ...prev, [item.name]: true }));
+      }
+    });
+  }, [location.pathname]);
+
   const getBreadcrumbs = () => {
     const paths = location.pathname.split('/').filter(x => x);
     return (
@@ -177,7 +211,7 @@ export default function Layout() {
           {filteredMenu.map((item, idx) => {
             if (item.isDropdown) {
               const isOpen = dropdowns[item.name];
-              const isChildActive = item.items.some(sub => location.pathname === sub.path || (sub.path !== '/' && location.pathname.startsWith(sub.path)));
+              const isChildActive = item.items.some(sub => isRouteActive(sub.path, location.pathname));
               return (
                 <div key={item.name} className="py-1">
                   <button 
@@ -193,7 +227,7 @@ export default function Layout() {
                   {isOpen && (
                     <div className="mt-1 pl-4 space-y-1 border-l border-slate-800 ml-3">
                       {item.items.map(subItem => {
-                        const isActive = location.pathname === subItem.path || (subItem.path !== '/' && location.pathname.startsWith(subItem.path));
+                        const isActive = isRouteActive(subItem.path, location.pathname);
                         return (
                           <Link
                             key={subItem.name}
@@ -215,7 +249,7 @@ export default function Layout() {
               );
             }
 
-            const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+            const isActive = isRouteActive(item.path, location.pathname);
             return (
               <Link
                 key={item.name}
@@ -276,7 +310,7 @@ export default function Layout() {
               {filteredMenu.map((item, idx) => {
                 if (item.isDropdown) {
                   const isOpen = dropdowns[item.name];
-                  const isChildActive = item.items.some(sub => location.pathname === sub.path || (sub.path !== '/' && location.pathname.startsWith(sub.path)));
+                  const isChildActive = item.items.some(sub => isRouteActive(sub.path, location.pathname));
                   return (
                     <div key={item.name} className="py-1">
                       <button 
@@ -292,7 +326,7 @@ export default function Layout() {
                       {isOpen && (
                         <div className="mt-1 pl-4 space-y-1 border-l border-slate-800 ml-3">
                           {item.items.map(subItem => {
-                            const isActive = location.pathname === subItem.path || (subItem.path !== '/' && location.pathname.startsWith(subItem.path));
+                            const isActive = isRouteActive(subItem.path, location.pathname);
                             return (
                               <Link
                                 key={subItem.name}
@@ -315,7 +349,7 @@ export default function Layout() {
                   );
                 }
 
-                const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+                const isActive = isRouteActive(item.path, location.pathname);
                 return (
                   <Link
                     key={item.name}
