@@ -6,7 +6,8 @@ import {
   Clock, Server, Info, Layers, ArrowRight, Copy, Check,
   Network, Wifi, Globe, Terminal, Sliders, Shield, ListFilter,
   FileSpreadsheet, Search, AlertTriangle, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight, ExternalLink, ArrowUpDown
+  ChevronLeft, ChevronRight, ExternalLink, ArrowUpDown, Smartphone,
+  Edit, RefreshCw, SmartphoneNfc
 } from 'lucide-react';
 
 // =========================================================================
@@ -95,8 +96,8 @@ export default function EquipmentCalculator() {
     baseIp: '192.168.1.0',
     cidr: 24,
     gatewayMode: 'first', // 'first' (.1) or 'last' (.254)
-    dns1: '1.1.1.1',
-    dns2: '8.8.8.8',
+    dns1: '192.168.1.10', // Corporate Internal AD/DNS primary
+    dns2: '1.1.1.1',      // Corporate Failover DNS secondary
     // Quantities for each device category
     infraCount: 5,     // Gateways, Switches, Routers, APs
     printerCount: 8,   // Static Network Printers / Copiers
@@ -104,6 +105,19 @@ export default function EquipmentCalculator() {
     pcCount: 45,       // Static Workstation Desktop PCs
     laptopCount: 60,   // Laptops & Mobile (DHCP Scope)
     bufferPercent: 15  // Buffer reserved headroom per group
+  });
+
+  // Per-Device Administrator Overrides state { [deviceId]: { ip, gateway, dns1, dns2, hostname, role, assignmentType, isOverridden } }
+  const [deviceOverrides, setDeviceOverrides] = useState({});
+  const [editingOverrideModal, setEditingOverrideModal] = useState(null);
+  const [overrideForm, setOverrideForm] = useState({
+    ip: '',
+    gateway: '',
+    dns1: '',
+    dns2: '',
+    hostname: '',
+    role: '',
+    assignmentType: 'Static IP'
   });
 
   // Table filter & sorting state
@@ -115,10 +129,11 @@ export default function EquipmentCalculator() {
   const [ipTablePage, setIpTablePage] = useState(1);
   const [ipTablePageSize, setIpTablePageSize] = useState(25);
 
-  // Selected device for configuration generator
+  // Selected device for configuration generator & setup guide
   const [selectedGeneratorDevice, setSelectedGeneratorDevice] = useState('infra_1');
   const [generatorInterface, setGeneratorInterface] = useState('Ethernet');
   const [generatorScriptTab, setGeneratorScriptTab] = useState('cmd'); // 'cmd', 'ps', 'netplan', 'params'
+  const [deviceGuidePlatform, setDeviceGuidePlatform] = useState('windows'); // 'windows', 'macos', 'android', 'ios'
 
   // Input validation
   const isBaseIpValid = useMemo(() => isValidIpv4(subnetParams.baseIp), [subnetParams.baseIp]);
@@ -241,6 +256,8 @@ export default function EquipmentCalculator() {
     if (firstOctet < 128) ipClass = 'Class A (Private: 10.0.0.0/8)';
     else if (firstOctet < 192) ipClass = 'Class B (Private: 172.16.0.0/12)';
 
+    const maskStr = cidrToMask(cidr);
+
     // Generate individual device records
     const generatedIps = [];
 
@@ -253,27 +270,35 @@ export default function EquipmentCalculator() {
       categoryLabel: 'Default Gateway / Router',
       assignmentType: 'Static Core',
       role: 'Enterprise Core Router / Default Gateway',
-      mask: cidrToMask(cidr),
+      mask: maskStr,
+      cidr,
       gateway: 'Self',
-      dns: `${subnetParams.dns1 || 'N/A'}, ${subnetParams.dns2 || 'N/A'}`
+      dns1: subnetParams.dns1 || 'N/A',
+      dns2: subnetParams.dns2 || 'N/A',
+      isOverridden: false
     });
 
     // Infrastructure Devices
     if (infraSize > 0) {
       for (let i = 1; i <= subnetParams.infraCount; i++) {
+        const devId = `infra_${i}`;
         const ipVal = ((infraStart + i - 1) >>> 0);
         if (ipVal <= infraEnd) {
+          const override = deviceOverrides[devId];
           generatedIps.push({
-            id: `infra_${i}`,
-            ip: intToIp(ipVal),
-            hostname: `NKB-SW-ACCESS-${String(i).padStart(2, '0')}`,
+            id: devId,
+            ip: override?.ip || intToIp(ipVal),
+            hostname: override?.hostname || `NKB-SW-ACCESS-${String(i).padStart(2, '0')}`,
             category: 'infra',
             categoryLabel: 'Network Infrastructure',
-            assignmentType: 'Static IP',
-            role: i === 1 ? 'Primary Core L3 Switch' : `Access Switch / AP Node ${i}`,
-            mask: cidrToMask(cidr),
-            gateway: gatewayIp,
-            dns: `${subnetParams.dns1}, ${subnetParams.dns2}`
+            assignmentType: override?.assignmentType || 'Static IP',
+            role: override?.role || (i === 1 ? 'Primary Core L3 Switch' : `Access Switch / AP Node ${i}`),
+            mask: maskStr,
+            cidr,
+            gateway: override?.gateway || gatewayIp,
+            dns1: override?.dns1 || subnetParams.dns1 || 'N/A',
+            dns2: override?.dns2 || subnetParams.dns2 || 'N/A',
+            isOverridden: !!override?.isOverridden
           });
         }
       }
@@ -282,19 +307,24 @@ export default function EquipmentCalculator() {
     // Printers
     if (printerSize > 0) {
       for (let i = 1; i <= subnetParams.printerCount; i++) {
+        const devId = `printer_${i}`;
         const ipVal = ((printerStart + i - 1) >>> 0);
         if (ipVal <= printerEnd) {
+          const override = deviceOverrides[devId];
           generatedIps.push({
-            id: `printer_${i}`,
-            ip: intToIp(ipVal),
-            hostname: `NKB-PRN-${String(i).padStart(2, '0')}`,
+            id: devId,
+            ip: override?.ip || intToIp(ipVal),
+            hostname: override?.hostname || `NKB-PRN-${String(i).padStart(2, '0')}`,
             category: 'printer',
             categoryLabel: 'Network Printer / Copier',
-            assignmentType: 'Static IP',
-            role: i === 1 ? 'Heavy Duty MFP Copier (Admin Office)' : `Department Network Printer ${i}`,
-            mask: cidrToMask(cidr),
-            gateway: gatewayIp,
-            dns: `${subnetParams.dns1}, ${subnetParams.dns2}`
+            assignmentType: override?.assignmentType || 'Static IP',
+            role: override?.role || (i === 1 ? 'Heavy Duty MFP Copier (Admin Office)' : `Department Network Printer ${i}`),
+            mask: maskStr,
+            cidr,
+            gateway: override?.gateway || gatewayIp,
+            dns1: override?.dns1 || subnetParams.dns1 || 'N/A',
+            dns2: override?.dns2 || subnetParams.dns2 || 'N/A',
+            isOverridden: !!override?.isOverridden
           });
         }
       }
@@ -303,19 +333,24 @@ export default function EquipmentCalculator() {
     // CCTV
     if (cctvSize > 0) {
       for (let i = 1; i <= subnetParams.cctvCount; i++) {
+        const devId = `cctv_${i}`;
         const ipVal = ((cctvStart + i - 1) >>> 0);
         if (ipVal <= cctvEnd) {
+          const override = deviceOverrides[devId];
           generatedIps.push({
-            id: `cctv_${i}`,
-            ip: intToIp(ipVal),
-            hostname: `NKB-CAM-${String(i).padStart(2, '0')}`,
+            id: devId,
+            ip: override?.ip || intToIp(ipVal),
+            hostname: override?.hostname || `NKB-CAM-${String(i).padStart(2, '0')}`,
             category: 'cctv',
             categoryLabel: 'CCTV Camera / NVR',
-            assignmentType: 'Static IP',
-            role: i === 1 ? 'NVR Master Storage Server' : `IP Surveillance Camera ${i}`,
-            mask: cidrToMask(cidr),
-            gateway: gatewayIp,
-            dns: `${subnetParams.dns1}, ${subnetParams.dns2}`
+            assignmentType: override?.assignmentType || 'Static IP',
+            role: override?.role || (i === 1 ? 'NVR Master Storage Server' : `IP Surveillance Camera ${i}`),
+            mask: maskStr,
+            cidr,
+            gateway: override?.gateway || gatewayIp,
+            dns1: override?.dns1 || subnetParams.dns1 || 'N/A',
+            dns2: override?.dns2 || subnetParams.dns2 || 'N/A',
+            isOverridden: !!override?.isOverridden
           });
         }
       }
@@ -324,50 +359,67 @@ export default function EquipmentCalculator() {
     // Desktop PCs
     if (pcSize > 0) {
       for (let i = 1; i <= subnetParams.pcCount; i++) {
+        const devId = `pc_${i}`;
         const ipVal = ((pcStart + i - 1) >>> 0);
         if (ipVal <= pcEnd) {
+          const override = deviceOverrides[devId];
           generatedIps.push({
-            id: `pc_${i}`,
-            ip: intToIp(ipVal),
-            hostname: `NKB-PC-${String(i).padStart(3, '0')}`,
+            id: devId,
+            ip: override?.ip || intToIp(ipVal),
+            hostname: override?.hostname || `NKB-PC-${String(i).padStart(3, '0')}`,
             category: 'pc',
             categoryLabel: 'Desktop Workstation',
-            assignmentType: 'Static IP',
-            role: `Fixed Office Workstation Desk ${i}`,
-            mask: cidrToMask(cidr),
-            gateway: gatewayIp,
-            dns: `${subnetParams.dns1}, ${subnetParams.dns2}`
+            assignmentType: override?.assignmentType || 'Static IP',
+            role: override?.role || `Fixed Office Workstation Desk ${i}`,
+            mask: maskStr,
+            cidr,
+            gateway: override?.gateway || gatewayIp,
+            dns1: override?.dns1 || subnetParams.dns1 || 'N/A',
+            dns2: override?.dns2 || subnetParams.dns2 || 'N/A',
+            isOverridden: !!override?.isOverridden
           });
         }
       }
     }
 
-    // Laptops
+    // Laptops (DHCP Scope)
     if (laptopSize > 0) {
       const displayLaptops = Math.min(30, subnetParams.laptopCount);
       for (let i = 1; i <= displayLaptops; i++) {
+        const devId = `laptop_${i}`;
         const ipVal = ((laptopStart + i - 1) >>> 0);
         if (ipVal <= laptopEnd) {
+          const override = deviceOverrides[devId];
           generatedIps.push({
-            id: `laptop_${i}`,
-            ip: intToIp(ipVal),
-            hostname: `NKB-LAP-${String(i).padStart(3, '0')}`,
+            id: devId,
+            ip: override?.ip || intToIp(ipVal),
+            hostname: override?.hostname || `NKB-LAP-${String(i).padStart(3, '0')}`,
             category: 'laptop',
             categoryLabel: 'Laptop / Mobile',
-            assignmentType: 'DHCP Pool',
-            role: `Staff Mobile Unit ${i} (DHCP Reservation)`,
-            mask: cidrToMask(cidr),
-            gateway: gatewayIp,
-            dns: `${subnetParams.dns1}, ${subnetParams.dns2}`
+            assignmentType: override?.assignmentType || 'DHCP Reservation',
+            role: override?.role || `Staff Mobile Unit ${i} (DHCP Reservation)`,
+            mask: maskStr,
+            cidr,
+            gateway: override?.gateway || gatewayIp,
+            dns1: override?.dns1 || subnetParams.dns1 || 'N/A',
+            dns2: override?.dns2 || subnetParams.dns2 || 'N/A',
+            isOverridden: !!override?.isOverridden
           });
         }
       }
     }
+
+    // Check for IP address collisions across the generated set
+    const ipCounts = {};
+    generatedIps.forEach(d => {
+      ipCounts[d.ip] = (ipCounts[d.ip] || 0) + 1;
+    });
+    const duplicateIps = Object.keys(ipCounts).filter(ip => ipCounts[ip] > 1);
 
     return {
       network: intToIp(networkInt),
       broadcast: intToIp(broadcastInt),
-      mask: cidrToMask(cidr),
+      mask: maskStr,
       wildcard: cidrToWildcard(cidr),
       firstUsable: intToIp(firstUsableInt),
       lastUsable: intToIp(lastUsableInt),
@@ -380,6 +432,7 @@ export default function EquipmentCalculator() {
       isOverCapacity,
       utilizationPercent,
       ipClass,
+      duplicateIps,
       ranges: {
         infra: { 
           start: infraSize > 0 ? intToIp(infraStart) : 'N/A', 
@@ -419,22 +472,25 @@ export default function EquipmentCalculator() {
       },
       generatedIps
     };
-  }, [subnetParams]);
+  }, [subnetParams, deviceOverrides]);
 
-  // Selected device for configuration generator
+  // Selected device for configuration generator & setup guide
   const activeDeviceRow = useMemo(() => {
     return subnetResults.generatedIps.find(x => x.id === selectedGeneratorDevice) || 
       subnetResults.generatedIps[1] || 
       subnetResults.generatedIps[0] || {
-        ip: '192.168.1.10',
-        hostname: 'NKB-DEVICE-01',
-        category: 'pc',
-        categoryLabel: 'Desktop Workstation',
+        id: 'infra_1',
+        ip: '192.168.1.2',
+        hostname: 'NKB-SW-ACCESS-01',
+        category: 'infra',
+        categoryLabel: 'Network Infrastructure',
         assignmentType: 'Static IP',
-        role: 'Office Workstation',
+        role: 'Primary Core L3 Switch',
         mask: '255.255.255.0',
+        cidr: 24,
         gateway: '192.168.1.1',
-        dns: '1.1.1.1, 8.8.8.8'
+        dns1: '192.168.1.10',
+        dns2: '1.1.1.1'
       };
   }, [subnetResults, selectedGeneratorDevice]);
 
@@ -494,28 +550,216 @@ export default function EquipmentCalculator() {
     }
   };
 
-  // Download IP Table CSV
+  // Open Administrator Override Modal for a device
+  const handleOpenOverrideModal = (dev) => {
+    setEditingOverrideModal(dev);
+    setOverrideForm({
+      ip: dev.ip,
+      gateway: dev.gateway === 'Self' ? dev.ip : dev.gateway,
+      dns1: dev.dns1 === 'N/A' ? (subnetParams.dns1 || '') : dev.dns1,
+      dns2: dev.dns2 === 'N/A' ? (subnetParams.dns2 || '') : dev.dns2,
+      hostname: dev.hostname,
+      role: dev.role,
+      assignmentType: dev.assignmentType
+    });
+  };
+
+  const handleSaveOverride = (e) => {
+    e.preventDefault();
+    if (!editingOverrideModal) return;
+
+    if (!isValidIpv4(overrideForm.ip)) {
+      alert('Invalid IP address entered. Please enter a valid IPv4 address.');
+      return;
+    }
+    if (overrideForm.gateway && !isValidIpv4(overrideForm.gateway)) {
+      alert('Invalid Gateway IP address entered.');
+      return;
+    }
+    if (overrideForm.dns1 && !isValidIpv4(overrideForm.dns1)) {
+      alert('Invalid Preferred DNS address entered.');
+      return;
+    }
+    if (overrideForm.dns2 && !isValidIpv4(overrideForm.dns2)) {
+      alert('Invalid Alternate DNS address entered.');
+      return;
+    }
+
+    setDeviceOverrides(prev => ({
+      ...prev,
+      [editingOverrideModal.id]: {
+        ...overrideForm,
+        isOverridden: true
+      }
+    }));
+
+    setEditingOverrideModal(null);
+  };
+
+  const handleResetOverride = (deviceId) => {
+    setDeviceOverrides(prev => {
+      const next = { ...prev };
+      delete next[deviceId];
+      return next;
+    });
+    setEditingOverrideModal(null);
+  };
+
+  // Download IP Table CSV (all 10 required fields)
   const handleDownloadCsv = () => {
-    const headers = ['IP Address', 'Hostname', 'Device Category', 'Assignment Type', 'Subnet Mask', 'Gateway', 'Primary DNS', 'Secondary DNS', 'Role / Description'];
+    const headers = [
+      'IP Address', 
+      'Hostname', 
+      'Device Category', 
+      'Assignment Type', 
+      'Subnet Mask', 
+      'CIDR Prefix', 
+      'Default Gateway', 
+      'Preferred DNS', 
+      'Alternate DNS', 
+      'Description / Location'
+    ];
     const rows = subnetResults.generatedIps.map(r => [
       `"${r.ip}"`,
       `"${r.hostname}"`,
       `"${r.categoryLabel}"`,
       `"${r.assignmentType}"`,
-      `"${subnetResults.mask}"`,
-      `"${subnetResults.gatewayIp}"`,
-      `"${subnetParams.dns1}"`,
-      `"${subnetParams.dns2}"`,
+      `"${r.mask}"`,
+      `"/${r.cidr}"`,
+      `"${r.gateway}"`,
+      `"${r.dns1}"`,
+      `"${r.dns2}"`,
       `"${r.role}"`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `NKB_IP_Plan_${subnetParams.baseIp.replace(/\./g, '_')}_slash${subnetParams.cidr}.csv`);
+    link.setAttribute('download', `NKB_IPAM_Schedule_${subnetParams.baseIp.replace(/\./g, '_')}_slash${subnetParams.cidr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Printable Device Setup Sheet
+  const handlePrintDeviceGuide = (device) => {
+    const target = device || activeDeviceRow;
+    const printWin = window.open('', '_blank', 'width=800,height=900');
+    if (!printWin) {
+      alert('Please allow popups to open the printable device setup guide.');
+      return;
+    }
+
+    const platformName = {
+      windows: 'Windows 10 / Windows 11',
+      macos: 'macOS (Sonoma / Ventura / Sequoia)',
+      android: 'Android 11–15 (Samsung / Pixel / MIUI)',
+      ios: 'Apple iOS (iPhone / iPad)'
+    }[deviceGuidePlatform] || 'Standard Operating System';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>NKB Device Setup Guide - ${target.hostname}</title>
+          <style>
+            @page { size: A4; margin: 15mm; }
+            body {
+              font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+              color: #0f172a;
+              background: #ffffff;
+              margin: 0;
+              padding: 0;
+              font-size: 11pt;
+              line-height: 1.5;
+            }
+            .header-bar {
+              border-bottom: 2px solid #0f172a;
+              padding-bottom: 8px;
+              margin-bottom: 16px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .title { font-size: 16pt; font-weight: 800; color: #0f172a; margin: 0; }
+            .subtitle { font-size: 9pt; color: #64748b; margin-top: 2px; }
+            .badge { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 9pt; }
+            .param-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            .param-table th, .param-table td { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10pt; text-align: left; }
+            .param-table th { background: #f8fafc; font-weight: 700; width: 35%; color: #334155; }
+            .param-table td { font-family: monospace; font-size: 10.5pt; font-weight: 700; color: #0f172a; }
+            .section-title { font-size: 12pt; font-weight: 800; margin: 18px 0 8px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; color: #1e293b; }
+            .steps-list { margin: 0; padding-left: 20px; font-size: 10pt; }
+            .steps-list li { margin-bottom: 6px; }
+            .alert-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 14px 0; font-size: 9pt; color: #92400e; }
+            .signoff-table { width: 100%; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
+            .signoff-table td { width: 50%; padding: 10px 0; font-size: 9pt; vertical-align: bottom; }
+            .sign-line { border-bottom: 1px solid #000; width: 80%; height: 25px; margin-top: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-bar">
+            <div>
+              <h1 class="title">NKB ITMS — DEVICE SETUP INSTRUCTIONS</h1>
+              <div class="subtitle">Official Static IP & Subnetting Deployment Guide | Network Infrastructure Protocol</div>
+            </div>
+            <div class="badge">${platformName}</div>
+          </div>
+
+          <table class="param-table">
+            <tr><th>Device Hostname</th><td>${target.hostname}</td></tr>
+            <tr><th>Device Category & Role</th><td>${target.categoryLabel} &bull; ${target.role}</td></tr>
+            <tr><th>Assignment Mode</th><td>${target.assignmentType}</td></tr>
+            <tr><th>Static IPv4 Address</th><td style="color: #2563eb;">${target.ip}</td></tr>
+            <tr><th>Subnet Mask</th><td>${target.mask} (Prefix: /${target.cidr})</td></tr>
+            <tr><th>Default Gateway</th><td>${target.gateway}</td></tr>
+            <tr><th>Preferred DNS Server</th><td>${target.dns1}</td></tr>
+            <tr><th>Alternate DNS Server</th><td>${target.dns2}</td></tr>
+          </table>
+
+          <div class="alert-box">
+            <strong>Precautionary Warning:</strong> Before changing configuration, write down or photograph existing network settings. Entering incorrect gateway or mask parameters will immediately sever host network connectivity.
+          </div>
+
+          <div class="section-title">Deployment Steps (${platformName})</div>
+          <ol class="steps-list">
+            <li><strong>Preparation:</strong> Record or screenshot all existing active network adapter properties.</li>
+            <li><strong>Mode Selection:</strong> Open adapter properties and change configuration method from <em>Automatic (DHCP)</em> to <strong>Manual / Static</strong>.</li>
+            <li><strong>IP Address:</strong> Enter exact assigned address <strong>${target.ip}</strong>.</li>
+            <li><strong>Subnet Mask:</strong> Enter <strong>${target.mask}</strong> (or prefix length <strong>${target.cidr}</strong>).</li>
+            <li><strong>Default Gateway:</strong> Enter <strong>${target.gateway}</strong> in the Gateway / Router field.</li>
+            <li><strong>DNS Configuration:</strong> Set Preferred DNS to <strong>${target.dns1}</strong> and Alternate DNS to <strong>${target.dns2}</strong>.</li>
+            <li><strong>Commit & Save:</strong> Click <em>Save</em> or <em>Apply</em> to commit configuration changes.</li>
+            <li><strong>Connectivity Verification:</strong> Verify local reachability by testing ping to gateway: <code>ping ${target.gateway}</code>. Confirm corporate resolution via <code>nslookup asset.nkbmanufacturing.com</code>.</li>
+          </ol>
+
+          <table class="signoff-table">
+            <tr>
+              <td>
+                Configured By (IT Technician Signature):
+                <div class="sign-line"></div>
+                Date: ________________________
+              </td>
+              <td>
+                Acknowledged By (Department / Custodian):
+                <div class="sign-line"></div>
+                Date: ________________________
+              </td>
+            </tr>
+          </table>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
   };
 
   // Copy Summary to Clipboard
@@ -530,7 +774,8 @@ Base Subnet: ${subnetResults.network}/${subnetParams.cidr}
 Subnet Mask: ${subnetResults.mask} (Wildcard: ${subnetResults.wildcard})
 Usable IP Scope: ${subnetResults.firstUsable} – ${subnetResults.lastUsable} (${subnetResults.usableHosts} Usable Hosts)
 Default Gateway: ${subnetResults.gatewayIp}
-DNS Resolvers: Primary: ${subnetParams.dns1 || 'N/A'} | Secondary: ${subnetParams.dns2 || 'N/A'}
+Preferred DNS Server: ${subnetParams.dns1 || 'N/A'}
+Alternate DNS Server: ${subnetParams.dns2 || 'N/A'}
 IP Class: ${subnetResults.ipClass}
 Total Utilization: ${subnetResults.utilizationPercent}% (${subnetResults.totalAllocatedSize} allocated / ${subnetResults.usableHosts} usable hosts)
 Spare Unallocated: ${subnetResults.remainingCapacity} IPs (${subnetResults.ranges.free.start} – ${subnetResults.ranges.free.end})
@@ -863,6 +1108,15 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
               <span className={`w-2 h-2 rounded-full ${subnetResults.isOverCapacity ? 'bg-rose-500' : 'bg-emerald-500'}`} />
               {subnetResults.isOverCapacity ? 'Capacity Overrun' : 'Subnet Healthy'}
             </span>
+            {subnetResults.duplicateIps.length > 0 && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="text-rose-600 font-bold inline-flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {subnetResults.duplicateIps.length} IP Conflict(s) Detected
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -891,7 +1145,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
 
       {/* =====================================================================
           ENTERPRISE MODULE NAVIGATION TABS
-          ===================================================================== */}
+          ==================================================================== */}
       <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 select-none">
         {[
           { id: 'subnet', label: 'Static IP & Subnetting', icon: Network },
@@ -932,25 +1186,28 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
             <div className="lg:col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-5">
               <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                 <div>
-                  <h2 className="font-bold text-slate-900 text-sm">Network Configuration & Device Requirements</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Define base network coordinates, gateway policy, and device counts</p>
+                  <h2 className="font-bold text-slate-900 text-sm">Network Configuration & Gateway/DNS Policy</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">First-class gateway and corporate DNS policy with device sizing</p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSubnetParams({
-                    planName: 'Production Plant Primary Subnet',
-                    baseIp: '192.168.1.0',
-                    cidr: 24,
-                    gatewayMode: 'first',
-                    dns1: '1.1.1.1',
-                    dns2: '8.8.8.8',
-                    infraCount: 5,
-                    printerCount: 8,
-                    cctvCount: 16,
-                    pcCount: 45,
-                    laptopCount: 60,
-                    bufferPercent: 15
-                  })}
+                  onClick={() => {
+                    setSubnetParams({
+                      planName: 'Production Plant Primary Subnet',
+                      baseIp: '192.168.1.0',
+                      cidr: 24,
+                      gatewayMode: 'first',
+                      dns1: '192.168.1.10',
+                      dns2: '1.1.1.1',
+                      infraCount: 5,
+                      printerCount: 8,
+                      cctvCount: 16,
+                      pcCount: 45,
+                      laptopCount: 60,
+                      bufferPercent: 15
+                    });
+                    setDeviceOverrides({});
+                  }}
                   className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 cursor-pointer font-medium"
                   title="Reset to factory baseline defaults"
                 >
@@ -967,7 +1224,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                     { label: '192.168.1.0/24 (Standard Office /24)', ip: '192.168.1.0', cidr: 24, name: 'Standard Office /24' },
                     { label: '192.168.10.0/24 (Plant Floor /24)', ip: '192.168.10.0', cidr: 24, name: 'Production Floor /24' },
                     { label: '10.0.0.0/23 (Medium Enterprise /23)', ip: '10.0.0.0', cidr: 23, name: 'Medium Enterprise /23' },
-                    { label: '172.16.0.0/22 (Campus Campus /22)', ip: '172.16.0.0', cidr: 22, name: 'Large Campus /22' }
+                    { label: '172.16.0.0/22 (Large Campus /22)', ip: '172.16.0.0', cidr: 22, name: 'Large Campus /22' }
                   ].map(p => (
                     <button
                       key={p.label}
@@ -1021,7 +1278,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                       isBaseIpValid ? 'border-slate-300' : 'border-rose-400 bg-rose-50/30'
                     }`}
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">Accepts any host IP or network boundary (0.0.0.0 – 255.255.255.255)</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Accepts network or host address (0.0.0.0 – 255.255.255.255)</p>
                 </div>
 
                 {/* CIDR Prefix */}
@@ -1047,7 +1304,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                     <option value="29">/29 — 255.255.255.248 (6 Hosts)</option>
                     <option value="30">/30 — 255.255.255.252 (2 Point-to-Point)</option>
                   </select>
-                  <p className="text-[10px] text-slate-400 mt-1">Defines network boundary size and usable address ceiling</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Defines network boundary and usable host address capacity</p>
                 </div>
 
                 {/* Gateway Placement */}
@@ -1063,7 +1320,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                     <option value="first">First Usable Address (e.g. .1 - Recommended)</option>
                     <option value="last">Last Usable Address (e.g. .254)</option>
                   </select>
-                  <p className="text-[10px] text-slate-400 mt-1">Excluded automatically from device IP pool allocations</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Subnet gateway address: <span className="font-mono font-bold text-slate-700">{subnetResults.gatewayIp}</span></p>
                 </div>
 
                 {/* Spare Growth Headroom */}
@@ -1084,27 +1341,44 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   <p className="text-[10px] text-slate-400 mt-1">Appends contiguous spare IP slots per category</p>
                 </div>
 
-                {/* Primary & Secondary DNS */}
+                {/* Preferred DNS (Supports Corporate Internal DNS) */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Primary DNS Server:</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">Preferred DNS Server:</label>
+                    {!isDns1Valid && (
+                      <span className="text-[10px] text-rose-600 font-bold">Invalid IPv4</span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={subnetParams.dns1}
                     onChange={e => setSubnetParams({ ...subnetParams, dns1: e.target.value.trim() })}
-                    placeholder="1.1.1.1"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                    placeholder="e.g. 192.168.1.10 (Internal AD DNS)"
+                    className={`w-full px-3 py-2 rounded-lg border text-xs font-mono font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white ${
+                      isDns1Valid ? 'border-slate-300' : 'border-rose-400 bg-rose-50/30'
+                    }`}
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Supports internal corporate Active Directory DNS or public resolvers</p>
                 </div>
 
+                {/* Alternate DNS */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Secondary DNS Server:</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">Alternate DNS Server:</label>
+                    {!isDns2Valid && (
+                      <span className="text-[10px] text-rose-600 font-bold">Invalid IPv4</span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={subnetParams.dns2}
                     onChange={e => setSubnetParams({ ...subnetParams, dns2: e.target.value.trim() })}
-                    placeholder="8.8.8.8"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                    placeholder="e.g. 1.1.1.1 or 8.8.8.8"
+                    className={`w-full px-3 py-2 rounded-lg border text-xs font-mono font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white ${
+                      isDns2Valid ? 'border-slate-300' : 'border-rose-400 bg-rose-50/30'
+                    }`}
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Secondary fallback DNS resolver for redundancy</p>
                 </div>
               </div>
 
@@ -1283,20 +1557,28 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                     <span className="font-semibold text-blue-300">{subnetResults.mask}</span>
                   </div>
                   <div className="flex justify-between items-center py-0.5">
-                    <span className="text-slate-400 font-sans">Wildcard Mask:</span>
-                    <span className="text-slate-400">{subnetResults.wildcard}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-0.5">
                     <span className="text-slate-400 font-sans">Default Gateway:</span>
                     <span className="font-semibold text-emerald-400">{subnetResults.gatewayIp}</span>
                   </div>
                   <div className="flex justify-between items-center py-0.5">
-                    <span className="text-slate-400 font-sans">Usable Host Range:</span>
+                    <span className="text-slate-400 font-sans">Preferred DNS:</span>
+                    <span className="font-semibold text-slate-200">{subnetParams.dns1 || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="text-slate-400 font-sans">Alternate DNS:</span>
+                    <span className="font-semibold text-slate-200">{subnetParams.dns2 || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="text-slate-400 font-sans">Usable Host Scope:</span>
                     <span className="font-semibold text-white">{subnetResults.firstUsable} – {subnetResults.lastUsable}</span>
                   </div>
                   <div className="flex justify-between items-center py-0.5">
                     <span className="text-slate-400 font-sans">Broadcast Address:</span>
                     <span className="text-slate-300">{subnetResults.broadcast}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="text-slate-400 font-sans">Wildcard Mask:</span>
+                    <span className="text-slate-400">{subnetResults.wildcard}</span>
                   </div>
                   <div className="flex justify-between items-center py-0.5">
                     <span className="text-slate-400 font-sans">IPv4 Class Standard:</span>
@@ -1645,7 +1927,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
           </div>
 
           {/* =====================================================================
-              IP ASSIGNMENT MASTER TABLE
+              IP ASSIGNMENT MASTER DIRECTORY (TABLE)
               ===================================================================== */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-3">
@@ -1655,7 +1937,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   <span>IP Address Assignment Master Directory</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Static IP mapping schedule for endpoints, servers, printers, and surveillance equipment
+                  Static IP mapping schedule with individual gateway & DNS server tracking
                 </p>
               </div>
 
@@ -1664,10 +1946,10 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   type="button"
                   onClick={handleDownloadCsv}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
-                  title="Export complete IP plan as a CSV spreadsheet"
+                  title="Export complete 10-field IP plan as a CSV spreadsheet"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Export CSV</span>
+                  <span>Export CSV (10 Fields)</span>
                 </button>
               </div>
             </div>
@@ -1706,9 +1988,9 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   onChange={e => { setIpTableTypeFilter(e.target.value); setIpTablePage(1); }}
                   className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-700 bg-white"
                 >
-                  <option value="all">All Assignment Types</option>
+                  <option value="all">All Types</option>
                   <option value="static">Static IP Only</option>
-                  <option value="dhcp">DHCP Scope Only</option>
+                  <option value="dhcp">DHCP Reservation Only</option>
                   <option value="core">Core Gateway Only</option>
                 </select>
               </div>
@@ -1758,9 +2040,11 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                         <ArrowUpDown className="w-3 h-3 text-slate-400" />
                       </div>
                     </th>
-                    <th className="py-2.5 px-3">Assignment Type</th>
-                    <th className="py-2.5 px-3">Subnet Mask</th>
-                    <th className="py-2.5 px-3">Gateway</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Mask / Prefix</th>
+                    <th className="py-2.5 px-3">Default Gateway</th>
+                    <th className="py-2.5 px-3">Preferred DNS</th>
+                    <th className="py-2.5 px-3">Alternate DNS</th>
                     <th className="py-2.5 px-3">Description / Role</th>
                     <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
@@ -1768,7 +2052,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                 <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
                   {paginatedRows.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-8 text-center text-slate-400 font-sans text-xs">
+                      <td colSpan="10" className="py-8 text-center text-slate-400 font-sans text-xs">
                         No IP assignments matching active filter criteria.
                       </td>
                     </tr>
@@ -1778,15 +2062,20 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                       return (
                         <tr 
                           key={row.id} 
-                          className={`transition ${isSelectedInGenerator ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}
+                          className={`transition ${isSelectedInGenerator ? 'bg-blue-50/70' : 'hover:bg-slate-50'}`}
                         >
                           {/* IP Address */}
                           <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">
                             <span className="font-mono">{row.ip}</span>
+                            {row.isOverridden && (
+                              <span className="ml-1.5 px-1 py-0.2 rounded text-[9px] font-sans font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                Overridden
+                              </span>
+                            )}
                           </td>
 
                           {/* Hostname */}
-                          <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">
+                          <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap font-sans">
                             {row.hostname}
                           </td>
 
@@ -1812,20 +2101,30 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                           <td className="py-2.5 px-3 text-slate-600 font-sans whitespace-nowrap">
                             <span className={`text-[11px] font-medium ${
                               row.assignmentType.includes('Core') ? 'font-bold text-slate-900' :
-                              row.assignmentType.includes('DHCP') ? 'text-emerald-700' : 'text-slate-700'
+                              row.assignmentType.includes('DHCP') ? 'text-emerald-700 font-semibold' : 'text-slate-700'
                             }`}>
                               {row.assignmentType}
                             </span>
                           </td>
 
-                          {/* Mask */}
+                          {/* Mask / Prefix */}
                           <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap text-[11px]">
-                            {row.mask}
+                            {row.mask} <span className="text-slate-400">/{row.cidr}</span>
                           </td>
 
                           {/* Gateway */}
-                          <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap text-[11px]">
+                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap text-[11px]">
                             {row.gateway}
+                          </td>
+
+                          {/* Preferred DNS */}
+                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap text-[11px]">
+                            {row.dns1}
+                          </td>
+
+                          {/* Alternate DNS */}
+                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap text-[11px]">
+                            {row.dns2}
                           </td>
 
                           {/* Description / Role */}
@@ -1842,20 +2141,32 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                                 className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-medium transition cursor-pointer border border-slate-200"
                                 title="Copy IP address to clipboard"
                               >
-                                {copiedKey === row.id ? 'Copied' : 'Copy'}
+                                {copiedKey === row.id ? 'Copied' : 'Copy IP'}
                               </button>
+                              
                               <button
                                 type="button"
                                 onClick={() => {
                                   setSelectedGeneratorDevice(row.id);
-                                  const el = document.getElementById('config-generator-section');
+                                  const el = document.getElementById('device-setup-guide-section');
                                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                                 }}
                                 className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-medium transition cursor-pointer border border-blue-200"
-                                title="Generate netsh, PowerShell, or Netplan scripts for this host"
+                                title="Select device for interactive setup guide & script generation"
                               >
-                                Script
+                                Setup Guide
                               </button>
+
+                              {row.id !== 'gateway' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenOverrideModal(row)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-medium transition cursor-pointer border border-slate-200"
+                                  title="Admin override for Gateway, DNS, or custom IP"
+                                >
+                                  Override
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1906,22 +2217,447 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
           </div>
 
           {/* =====================================================================
-              CONFIGURATION GENERATOR (WINDOWS CMD, POWERSHELL, LINUX NETPLAN)
+              DEDICATED DEVICE SETUP INSTRUCTIONS & INTERACTIVE GUIDE (SECTION B & C)
               ===================================================================== */}
-          <div id="config-generator-section" className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+          <div id="device-setup-guide-section" className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <h3 className="font-bold text-slate-900 text-sm">Device Setup Instructions & Interactive Guide</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Step-by-step operating system deployment guides with actual parameters for <strong>{activeDeviceRow.hostname}</strong> ({activeDeviceRow.ip})
+                </p>
+              </div>
+
+              {/* Action Buttons for Device Guide */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cfgBlock = `HOSTNAME: ${activeDeviceRow.hostname}
+IP ADDRESS: ${activeDeviceRow.ip}
+SUBNET MASK: ${activeDeviceRow.mask} (/${activeDeviceRow.cidr})
+DEFAULT GATEWAY: ${activeDeviceRow.gateway}
+PREFERRED DNS: ${activeDeviceRow.dns1}
+ALTERNATE DNS: ${activeDeviceRow.dns2}
+CATEGORY: ${activeDeviceRow.categoryLabel}
+ASSIGNMENT: ${activeDeviceRow.assignmentType}
+DESCRIPTION: ${activeDeviceRow.role}`;
+                    copyText(cfgBlock, 'device_config');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition cursor-pointer"
+                  title="Copy full 10-field configuration block"
+                >
+                  {copiedKey === 'device_config' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                  <span>{copiedKey === 'device_config' ? 'Copied Configuration!' : 'Copy Configuration'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePrintDeviceGuide(activeDeviceRow)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
+                  title="Print single-device A4 setup & sign-off sheet"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Setup Sheet</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Device Configuration Summary Card */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4.5 space-y-3">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Selected Hardware Profile:</span>
+                  <span className="text-xs font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
+                    {activeDeviceRow.hostname}
+                  </span>
+                  <span className="text-xs text-slate-500">({activeDeviceRow.categoryLabel})</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">Assignment Type:</span>
+                  <span className="font-semibold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
+                    {activeDeviceRow.assignmentType}
+                  </span>
+                </div>
+              </div>
+
+              {/* Parameter Tiles (All 10 required fields populated from real state) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">1. IP Address</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-blue-700 text-xs">{activeDeviceRow.ip}</span>
+                    <button onClick={() => copyText(activeDeviceRow.ip, 'p_ip')} className="text-slate-400 hover:text-slate-600">
+                      {copiedKey === 'p_ip' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">2. Subnet Mask</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-slate-800 text-xs">{activeDeviceRow.mask}</span>
+                    <button onClick={() => copyText(activeDeviceRow.mask, 'p_mask')} className="text-slate-400 hover:text-slate-600">
+                      {copiedKey === 'p_mask' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">3. CIDR Prefix</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-slate-800 text-xs">/{activeDeviceRow.cidr}</span>
+                    <span className="text-[10px] text-slate-400 font-sans">Prefix Length</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">4. Default Gateway</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-emerald-700 text-xs">{activeDeviceRow.gateway}</span>
+                    <button onClick={() => copyText(activeDeviceRow.gateway, 'p_gw')} className="text-slate-400 hover:text-slate-600">
+                      {copiedKey === 'p_gw' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">5. Preferred DNS</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-slate-800 text-xs">{activeDeviceRow.dns1}</span>
+                    <button onClick={() => copyText(activeDeviceRow.dns1, 'p_dns1')} className="text-slate-400 hover:text-slate-600">
+                      {copiedKey === 'p_dns1' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">6. Alternate DNS</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-bold text-slate-800 text-xs">{activeDeviceRow.dns2}</span>
+                    <button onClick={() => copyText(activeDeviceRow.dns2, 'p_dns2')} className="text-slate-400 hover:text-slate-600">
+                      {copiedKey === 'p_dns2' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Operating System Platform Selector Tabs */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 select-none">
+                {[
+                  { id: 'windows', label: 'Windows 10 / Windows 11', icon: Monitor },
+                  { id: 'macos', label: 'macOS (Apple Mac)', icon: Laptop },
+                  { id: 'android', label: 'Android (Phone / Tablet / Scanner)', icon: Smartphone },
+                  { id: 'ios', label: 'iPhone / iPad (Apple iOS)', icon: SmartphoneNfc }
+                ].map(p => {
+                  const Icon = p.icon;
+                  const isActive = deviceGuidePlatform === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setDeviceGuidePlatform(p.id)}
+                      className={`inline-flex items-center gap-2 py-2 px-3.5 rounded-md text-xs font-semibold transition cursor-pointer ${
+                        isActive 
+                          ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-bold' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-600' : 'text-slate-500'}`} />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Precaution Warning Banner */}
+              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Record Existing Settings First:</span> Before applying manual network changes, record or take a screenshot of your current adapter properties. Setting an incorrect gateway or mask will interrupt local connectivity.
+                </div>
+              </div>
+
+              {/* Platform Specific Step-by-Step Instructions */}
+
+              {/* 1. WINDOWS GUIDE */}
+              {deviceGuidePlatform === 'windows' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
+                  <div className="border-b border-slate-200 pb-2 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Monitor className="w-4 h-4 text-blue-600" />
+                      <span>Windows 10 & Windows 11 Manual IPv4 Setup</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500">Settings app & Control Panel methods</span>
+                  </div>
+
+                  <div className="space-y-3 text-slate-700 leading-relaxed">
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                      <div>
+                        <strong>Open Network Settings:</strong> Press <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px]">Win + I</kbd> to open Windows Settings, navigate to <strong>Network & internet</strong>, then click on your active connection (<strong>Ethernet</strong> or <strong>Wi-Fi</strong>).
+                        <span className="block text-slate-500 text-[11px] mt-0.5">Alternative: Press <kbd className="px-1 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px]">Win + R</kbd>, type <code>ncpa.cpl</code>, right-click adapter &rarr; Properties &rarr; double-click <em>Internet Protocol Version 4 (TCP/IPv4)</em>.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                      <div>
+                        <strong>Switch to Manual IPv4:</strong> Under <strong>IP assignment</strong>, click <strong>Edit</strong>. Change dropdown from <em>Automatic (DHCP)</em> to <strong>Manual</strong>, then toggle the <strong>IPv4</strong> switch to <strong>On</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                      <div>
+                        <strong>Enter Exact IP Coordinates:</strong>
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white p-3 rounded-lg border border-slate-200 font-mono text-[11px]">
+                          <div>IP address: <strong className="text-blue-700">{activeDeviceRow.ip}</strong></div>
+                          <div>Subnet prefix length: <strong>{activeDeviceRow.cidr}</strong> (or mask: <strong>{activeDeviceRow.mask}</strong>)</div>
+                          <div>Default gateway: <strong className="text-emerald-700">{activeDeviceRow.gateway}</strong></div>
+                          <div>Preferred DNS: <strong>{activeDeviceRow.dns1}</strong></div>
+                          <div>Alternate DNS: <strong>{activeDeviceRow.dns2}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">4</span>
+                      <div>
+                        <strong>Save & Commit:</strong> Click <strong>Save</strong> (or <strong>OK</strong> in Control Panel). Windows will reinitialize the network adapter.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
+                      <div>
+                        <strong>Verify Connection:</strong> Open Command Prompt (<kbd className="px-1 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px]">cmd</kbd>) and test:
+                        <code className="block mt-1 p-2 bg-slate-900 text-emerald-400 rounded font-mono text-[11px] select-all">
+                          ping {activeDeviceRow.gateway} && nslookup asset.nkbmanufacturing.com
+                        </code>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 font-bold text-[11px] flex items-center justify-center shrink-0">?</span>
+                      <div>
+                        <strong>Troubleshooting:</strong> If gateway ping fails, verify cable/Wi-Fi connection and ensure subnet mask is exactly <code>{activeDeviceRow.mask}</code>. If IP conflict message appears, verify no other machine is set to <code>{activeDeviceRow.ip}</code>.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. MACOS GUIDE */}
+              {deviceGuidePlatform === 'macos' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
+                  <div className="border-b border-slate-200 pb-2 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Laptop className="w-4 h-4 text-blue-600" />
+                      <span>macOS (Sonoma / Ventura / Sequoia) Manual IPv4 Setup</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500">System Settings &rarr; Network panel</span>
+                  </div>
+
+                  <div className="space-y-3 text-slate-700 leading-relaxed">
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                      <div>
+                        <strong>Open Network Settings:</strong> Click the <strong>Apple Menu ()</strong> in the top-left &rarr; <strong>System Settings...</strong> &rarr; Click <strong>Network</strong> in the left sidebar.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                      <div>
+                        <strong>Open Connection Details:</strong> Click on your active connection (<strong>Wi-Fi</strong> or <strong>Ethernet</strong>), then click the <strong>Details...</strong> button next to the connected network.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                      <div>
+                        <strong>Configure TCP/IP:</strong> In the left tabs of the modal, click <strong>TCP/IP</strong>. Change <strong>Configure IPv4</strong> from <em>Using DHCP</em> to <strong>Manually</strong>.
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-3 rounded-lg border border-slate-200 font-mono text-[11px]">
+                          <div>IP Address: <strong className="text-blue-700">{activeDeviceRow.ip}</strong></div>
+                          <div>Subnet Mask: <strong>{activeDeviceRow.mask}</strong></div>
+                          <div>Router (Gateway): <strong className="text-emerald-700">{activeDeviceRow.gateway}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">4</span>
+                      <div>
+                        <strong>Configure DNS Servers:</strong> Click the <strong>DNS</strong> tab on the left sidebar. Under <strong>DNS Servers</strong>, click the <strong>+ (Add)</strong> button and enter:
+                        <div className="mt-1 flex gap-2 font-mono text-[11px]">
+                          <span className="bg-white px-2 py-1 rounded border border-slate-300">1: {activeDeviceRow.dns1}</span>
+                          <span className="bg-white px-2 py-1 rounded border border-slate-300">2: {activeDeviceRow.dns2}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
+                      <div>
+                        <strong>Apply & Verify:</strong> Click <strong>OK</strong>, then click <strong>Apply</strong>. Open <strong>Terminal</strong> and run:
+                        <code className="block mt-1 p-2 bg-slate-900 text-emerald-400 rounded font-mono text-[11px] select-all">
+                          ping -c 3 {activeDeviceRow.gateway}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. ANDROID GUIDE */}
+              {deviceGuidePlatform === 'android' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
+                  <div className="border-b border-slate-200 pb-2 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Smartphone className="w-4 h-4 text-blue-600" />
+                      <span>Android (Phones, Tablets & Barcode Scanners) Wi-Fi Setup</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500">Samsung OneUI / Pixel / MIUI / Zebra Android</span>
+                  </div>
+
+                  <div className="space-y-3 text-slate-700 leading-relaxed">
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                      <div>
+                        <strong>Navigate to Wi-Fi:</strong> Open <strong>Settings</strong> &rarr; <strong>Connections</strong> (or <em>Network & internet</em>) &rarr; Tap <strong>Wi-Fi</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                      <div>
+                        <strong>Edit Network Settings:</strong> Tap the <strong>Gear icon (⚙️)</strong> next to your connected corporate Wi-Fi network &rarr; Tap <strong>View more</strong> (or the <em>Pencil / Edit</em> icon).
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                      <div>
+                        <strong>Switch IP Settings to Static:</strong> Locate <strong>IP settings</strong> and change from <em>DHCP</em> to <strong>Static</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">4</span>
+                      <div>
+                        <strong>Enter Exact Network Parameters:</strong>
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white p-3 rounded-lg border border-slate-200 font-mono text-[11px]">
+                          <div>IP address: <strong className="text-blue-700">{activeDeviceRow.ip}</strong></div>
+                          <div>Gateway: <strong className="text-emerald-700">{activeDeviceRow.gateway}</strong></div>
+                          <div>Network prefix length: <strong>{activeDeviceRow.cidr}</strong> (Important: enter prefix integer, not 255.255.255.0)</div>
+                          <div>DNS 1: <strong>{activeDeviceRow.dns1}</strong></div>
+                          <div>DNS 2: <strong>{activeDeviceRow.dns2}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
+                      <div>
+                        <strong>Save & Scope Notice:</strong> Tap <strong>Save</strong>. The device will reconnect with the static lease.
+                        <span className="block text-slate-500 text-[11px] mt-0.5"><em>Scope Notice:</em> Static IP applies solely to this corporate Wi-Fi SSID. Connecting to external or home Wi-Fi networks will automatically retain normal DHCP operation.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. IPHONE / IOS GUIDE */}
+              {deviceGuidePlatform === 'ios' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
+                  <div className="border-b border-slate-200 pb-2 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <SmartphoneNfc className="w-4 h-4 text-blue-600" />
+                      <span>Apple iOS (iPhone & iPad) Wi-Fi Configuration</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500">iOS 16 / 17 / 18 Settings app</span>
+                  </div>
+
+                  <div className="space-y-3 text-slate-700 leading-relaxed">
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                      <div>
+                        <strong>Open Wi-Fi Settings:</strong> Open the iOS <strong>Settings</strong> app &rarr; Tap <strong>Wi-Fi</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                      <div>
+                        <strong>Open Network Information:</strong> Tap the blue information icon (<strong>ⓘ</strong>) next to the connected NKB corporate Wi-Fi network.
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                      <div>
+                        <strong>Configure IPv4 Manually:</strong> Scroll down and tap <strong>Configure IP</strong>. Change from <em>Automatic</em> to <strong>Manual</strong>:
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-3 rounded-lg border border-slate-200 font-mono text-[11px]">
+                          <div>IP Address: <strong className="text-blue-700">{activeDeviceRow.ip}</strong></div>
+                          <div>Subnet Mask: <strong>{activeDeviceRow.mask}</strong></div>
+                          <div>Router: <strong className="text-emerald-700">{activeDeviceRow.gateway}</strong></div>
+                        </div>
+                        <span className="block text-slate-500 text-[11px] mt-1">Tap <strong>Save</strong> in the top-right corner.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">4</span>
+                      <div>
+                        <strong>Configure DNS Manually (Separate Section):</strong> On the same network page, tap <strong>Configure DNS</strong>. Change from <em>Automatic</em> to <strong>Manual</strong>.
+                        Delete any old DNS entries, tap <strong>Add Server</strong>, and enter:
+                        <div className="mt-1 flex gap-2 font-mono text-[11px]">
+                          <span className="bg-white px-2 py-1 rounded border border-slate-300">Server 1: {activeDeviceRow.dns1}</span>
+                          <span className="bg-white px-2 py-1 rounded border border-slate-300">Server 2: {activeDeviceRow.dns2}</span>
+                        </div>
+                        <span className="block text-slate-500 text-[11px] mt-1">Tap <strong>Save</strong> in the top-right corner.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
+                      <div>
+                        <strong>Verify Connection:</strong> Toggle Wi-Fi off and back on in Settings to confirm lease binding. Open Safari and browse to <code>https://asset.nkbmanufacturing.com</code>.
+                        <span className="block text-slate-500 text-[11px] mt-0.5"><em>Notice:</em> Do not alter Cellular / APN settings. This procedure applies solely to the corporate Wi-Fi profile.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* =====================================================================
+              AUTOMATED CONFIGURATION SCRIPT GENERATOR (WINDOWS CMD, PS, NETPLAN)
+              ===================================================================== */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-blue-600" />
-                  <span>Host Network Configuration Script Generator</span>
+                  <span>Automated Command Generator (CMD / PowerShell / Netplan)</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Automated provisioning commands for selected network host ({activeDeviceRow.hostname} • {activeDeviceRow.ip})
+                  Single-click deployable scripts for system administrators and automation tools
                 </p>
               </div>
               
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500">Target Adapter:</span>
+                <span className="text-xs font-semibold text-slate-500">Network Interface:</span>
                 <input
                   type="text"
                   value={generatorInterface}
@@ -1929,58 +2665,6 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   placeholder="Ethernet"
                   className="px-2.5 py-1 rounded border border-slate-300 text-xs font-mono font-medium text-slate-800 w-28 bg-white"
                 />
-              </div>
-            </div>
-
-            {/* Target Device Selector Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs">
-              <div>
-                <label className="block text-slate-500 font-semibold mb-1">Target Endpoint Host:</label>
-                <select
-                  value={selectedGeneratorDevice}
-                  onChange={e => setSelectedGeneratorDevice(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs font-medium text-slate-900 bg-white font-mono"
-                >
-                  <optgroup label="Network Infrastructure">
-                    {subnetResults.generatedIps.filter(x => x.category === 'infra').map(x => (
-                      <option key={x.id} value={x.id}>{x.hostname} — {x.ip} ({x.role})</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Desktop Workstations">
-                    {subnetResults.generatedIps.filter(x => x.category === 'pc').map(x => (
-                      <option key={x.id} value={x.id}>{x.hostname} — {x.ip}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="CCTV Surveillance">
-                    {subnetResults.generatedIps.filter(x => x.category === 'cctv').map(x => (
-                      <option key={x.id} value={x.id}>{x.hostname} — {x.ip}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Network Printers">
-                    {subnetResults.generatedIps.filter(x => x.category === 'printer').map(x => (
-                      <option key={x.id} value={x.id}>{x.hostname} — {x.ip}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Laptops">
-                    {subnetResults.generatedIps.filter(x => x.category === 'laptop').map(x => (
-                      <option key={x.id} value={x.id}>{x.hostname} — {x.ip}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-500 font-semibold mb-1">Assigned Address:</label>
-                <div className="px-2.5 py-1.5 rounded-md border border-slate-300 bg-white font-mono font-bold text-blue-700">
-                  {activeDeviceRow.ip} /{subnetParams.cidr}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-500 font-semibold mb-1">Default Gateway & Mask:</label>
-                <div className="px-2.5 py-1.5 rounded-md border border-slate-300 bg-white font-mono font-medium text-slate-700">
-                  {subnetResults.gatewayIp} &bull; {subnetResults.mask}
-                </div>
               </div>
             </div>
 
@@ -2040,7 +2724,7 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                   <button
                     type="button"
                     onClick={() => {
-                      const cmd = `:: Configure Static IPv4 and DNS for ${activeDeviceRow.hostname}\nnetsh interface ip set address name="${generatorInterface}" static ${activeDeviceRow.ip} ${subnetResults.mask} ${subnetResults.gatewayIp} 1\nnetsh interface ip set dns name="${generatorInterface}" static ${subnetParams.dns1 || '1.1.1.1'}\nnetsh interface ip add dns name="${generatorInterface}" ${subnetParams.dns2 || '8.8.8.8'} index=2`;
+                      const cmd = `:: NKB ITMS - Static IPv4 & DNS Script\n:: Target: ${activeDeviceRow.hostname} (${activeDeviceRow.categoryLabel})\nnetsh interface ip set address name="${generatorInterface}" static ${activeDeviceRow.ip} ${activeDeviceRow.mask} ${activeDeviceRow.gateway} 1\nnetsh interface ip set dns name="${generatorInterface}" static ${activeDeviceRow.dns1}\nnetsh interface ip add dns name="${generatorInterface}" ${activeDeviceRow.dns2} index=2`;
                       copyText(cmd, 'cmd');
                     }}
                     className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
@@ -2052,9 +2736,9 @@ Monthly Operating Cost: ${formatCurrency(printerResults.monthlyTotalOpex)}
                 <pre className="p-4 bg-slate-950 text-slate-100 rounded-lg font-mono text-xs overflow-x-auto leading-relaxed border border-slate-800 select-all">
 {`:: NKB ITMS Automated Network Adapter Configuration
 :: Target Host: ${activeDeviceRow.hostname} (${activeDeviceRow.categoryLabel})
-netsh interface ip set address name="${generatorInterface}" static ${activeDeviceRow.ip} ${subnetResults.mask} ${subnetResults.gatewayIp} 1
-netsh interface ip set dns name="${generatorInterface}" static ${subnetParams.dns1 || '1.1.1.1'}
-netsh interface ip add dns name="${generatorInterface}" ${subnetParams.dns2 || '8.8.8.8'} index=2`}
+netsh interface ip set address name="${generatorInterface}" static ${activeDeviceRow.ip} ${activeDeviceRow.mask} ${activeDeviceRow.gateway} 1
+netsh interface ip set dns name="${generatorInterface}" static ${activeDeviceRow.dns1}
+netsh interface ip add dns name="${generatorInterface}" ${activeDeviceRow.dns2} index=2`}
                 </pre>
               </div>
             )}
@@ -2066,7 +2750,7 @@ netsh interface ip add dns name="${generatorInterface}" ${subnetParams.dns2 || '
                   <button
                     type="button"
                     onClick={() => {
-                      const ps = `# Configure Static IPv4 and DNS for ${activeDeviceRow.hostname}\nNew-NetIPAddress -InterfaceAlias "${generatorInterface}" -IPAddress "${activeDeviceRow.ip}" -PrefixLength ${subnetParams.cidr} -DefaultGateway "${subnetResults.gatewayIp}"\nSet-DnsClientServerAddress -InterfaceAlias "${generatorInterface}" -ServerAddresses ("${subnetParams.dns1 || '1.1.1.1'}","${subnetParams.dns2 || '8.8.8.8'}")`;
+                      const ps = `# NKB ITMS PowerShell IPv4 Deployment\n# Target Host: ${activeDeviceRow.hostname} (${activeDeviceRow.categoryLabel})\nNew-NetIPAddress -InterfaceAlias "${generatorInterface}" -IPAddress "${activeDeviceRow.ip}" -PrefixLength ${activeDeviceRow.cidr} -DefaultGateway "${activeDeviceRow.gateway}"\nSet-DnsClientServerAddress -InterfaceAlias "${generatorInterface}" -ServerAddresses ("${activeDeviceRow.dns1}","${activeDeviceRow.dns2}")`;
                       copyText(ps, 'ps');
                     }}
                     className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
@@ -2078,8 +2762,8 @@ netsh interface ip add dns name="${generatorInterface}" ${subnetParams.dns2 || '
                 <pre className="p-4 bg-slate-950 text-slate-100 rounded-lg font-mono text-xs overflow-x-auto leading-relaxed border border-slate-800 select-all">
 {`# NKB ITMS PowerShell IPv4 Deployment
 # Target Host: ${activeDeviceRow.hostname} (${activeDeviceRow.categoryLabel})
-New-NetIPAddress -InterfaceAlias "${generatorInterface}" -IPAddress "${activeDeviceRow.ip}" -PrefixLength ${subnetParams.cidr} -DefaultGateway "${subnetResults.gatewayIp}"
-Set-DnsClientServerAddress -InterfaceAlias "${generatorInterface}" -ServerAddresses ("${subnetParams.dns1 || '1.1.1.1'}","${subnetParams.dns2 || '8.8.8.8'}")`}
+New-NetIPAddress -InterfaceAlias "${generatorInterface}" -IPAddress "${activeDeviceRow.ip}" -PrefixLength ${activeDeviceRow.cidr} -DefaultGateway "${activeDeviceRow.gateway}"
+Set-DnsClientServerAddress -InterfaceAlias "${generatorInterface}" -ServerAddresses ("${activeDeviceRow.dns1}","${activeDeviceRow.dns2}")`}
                 </pre>
               </div>
             )}
@@ -2091,7 +2775,7 @@ Set-DnsClientServerAddress -InterfaceAlias "${generatorInterface}" -ServerAddres
                   <button
                     type="button"
                     onClick={() => {
-                      const netplan = `# /etc/netplan/01-netcfg.yaml\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    ${generatorInterface.toLowerCase()}:\n      dhcp4: no\n      addresses:\n        - ${activeDeviceRow.ip}/${subnetParams.cidr}\n      routes:\n        - to: default\n          via: ${subnetResults.gatewayIp}\n      nameservers:\n        addresses: [${subnetParams.dns1 || '1.1.1.1'}, ${subnetParams.dns2 || '8.8.8.8'}]`;
+                      const netplan = `# /etc/netplan/01-netcfg.yaml\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    ${generatorInterface.toLowerCase()}:\n      dhcp4: no\n      addresses:\n        - ${activeDeviceRow.ip}/${activeDeviceRow.cidr}\n      routes:\n        - to: default\n          via: ${activeDeviceRow.gateway}\n      nameservers:\n        addresses: [${activeDeviceRow.dns1}, ${activeDeviceRow.dns2}]`;
                       copyText(netplan, 'netplan');
                     }}
                     className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
@@ -2110,49 +2794,169 @@ network:
     ${generatorInterface.toLowerCase()}:
       dhcp4: no
       addresses:
-        - ${activeDeviceRow.ip}/${subnetParams.cidr}
+        - ${activeDeviceRow.ip}/${activeDeviceRow.cidr}
       routes:
         - to: default
-          via: ${subnetResults.gatewayIp}
+          via: ${activeDeviceRow.gateway}
       nameservers:
-        addresses: [${subnetParams.dns1 || '1.1.1.1'}, ${subnetParams.dns2 || '8.8.8.8'}]`}
+        addresses: [${activeDeviceRow.dns1}, ${activeDeviceRow.dns2}]`}
                 </pre>
               </div>
             )}
 
             {generatorScriptTab === 'params' && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">IP Address</span>
                   <span className="font-mono font-bold text-slate-900 select-all">{activeDeviceRow.ip}</span>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Subnet Mask</span>
-                  <span className="font-mono font-bold text-slate-900 select-all">{subnetResults.mask}</span>
+                  <span className="font-mono font-bold text-slate-900 select-all">{activeDeviceRow.mask}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">CIDR Prefix</span>
+                  <span className="font-mono font-bold text-slate-900 select-all">/{activeDeviceRow.cidr}</span>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Default Gateway</span>
-                  <span className="font-mono font-bold text-slate-900 select-all">{subnetResults.gatewayIp}</span>
+                  <span className="font-mono font-bold text-slate-900 select-all">{activeDeviceRow.gateway}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Primary DNS</span>
-                  <span className="font-mono font-bold text-slate-900 select-all">{subnetParams.dns1}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Preferred DNS</span>
+                  <span className="font-mono font-bold text-slate-900 select-all">{activeDeviceRow.dns1}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Secondary DNS</span>
-                  <span className="font-mono font-bold text-slate-900 select-all">{subnetParams.dns2}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Alternate DNS</span>
+                  <span className="font-mono font-bold text-slate-900 select-all">{activeDeviceRow.dns2}</span>
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Safety Warning Banner */}
-            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Operational Network Safety Warning:</span> Applying static IP configurations directly will temporarily terminate active TCP/IP sessions on the target adapter until network routing reconverges. Always verify IP address availability before applying.
+          {/* =====================================================================
+              MODAL: ADMINISTRATOR DEVICE CONFIGURATION OVERRIDE
+              ===================================================================== */}
+          {editingOverrideModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in" onClick={() => setEditingOverrideModal(null)}>
+              <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">Administrator Device Configuration Override</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Customize gateway, DNS, or IP coordinates for {editingOverrideModal.hostname}</p>
+                  </div>
+                  <button onClick={() => setEditingOverrideModal(null)} className="text-slate-400 hover:text-slate-600 font-bold">
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveOverride} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Host Device Name:</label>
+                    <input
+                      type="text"
+                      required
+                      value={overrideForm.hostname}
+                      onChange={e => setOverrideForm({ ...overrideForm, hostname: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 font-medium text-slate-900"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Custom IPv4 Address:</label>
+                      <input
+                        type="text"
+                        required
+                        value={overrideForm.ip}
+                        onChange={e => setOverrideForm({ ...overrideForm, ip: e.target.value.trim() })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-medium text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Assignment Type:</label>
+                      <select
+                        value={overrideForm.assignmentType}
+                        onChange={e => setOverrideForm({ ...overrideForm, assignmentType: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 font-medium text-slate-900"
+                      >
+                        <option value="Static IP">Static IP</option>
+                        <option value="DHCP Reservation">DHCP Reservation</option>
+                        <option value="Static Core">Static Core</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Custom Default Gateway:</label>
+                    <input
+                      type="text"
+                      required
+                      value={overrideForm.gateway}
+                      onChange={e => setOverrideForm({ ...overrideForm, gateway: e.target.value.trim() })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-medium text-slate-900"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Preferred DNS:</label>
+                      <input
+                        type="text"
+                        value={overrideForm.dns1}
+                        onChange={e => setOverrideForm({ ...overrideForm, dns1: e.target.value.trim() })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-medium text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Alternate DNS:</label>
+                      <input
+                        type="text"
+                        value={overrideForm.dns2}
+                        onChange={e => setOverrideForm({ ...overrideForm, dns2: e.target.value.trim() })}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-medium text-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Role / Location Description:</label>
+                    <input
+                      type="text"
+                      value={overrideForm.role}
+                      onChange={e => setOverrideForm({ ...overrideForm, role: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 font-medium text-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center pt-3 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => handleResetOverride(editingOverrideModal.id)}
+                      className="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
+                    >
+                      Reset to Plan Defaults
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingOverrideModal(null)}
+                        className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer shadow-xs"
+                      >
+                        Save Override
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
             </div>
-          </div>
+          )}
 
         </div>
       )}
@@ -2201,7 +3005,7 @@ network:
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Camera Channels: <span className="font-bold text-blue-600">{cctvParams.cameras} Cameras</span>
+                  Camera Channels: <span className="font-bold text-blue-600">{cctvParams.cameras} Channels</span>
                 </label>
                 <input
                   type="range"
