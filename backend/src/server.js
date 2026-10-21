@@ -197,6 +197,7 @@ app.use('/api/remote', require('./routes/remoteManagement'));
 app.use('/api/v1/agent', require('./routes/agentApi'));
 app.use('/api/v1/webfilter', require('./routes/webFiltering'));
 app.use('/api/mdm', require('./routes/mdm'));
+app.use('/api/wifi-monitor', require('./routes/wifiMonitor'));
 
 // 7. Serve Static Frontend files (supporting either frontend/dist or client/dist or backend/public)
 const candidateDistPaths = [

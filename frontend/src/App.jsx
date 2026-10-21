@@ -40,6 +40,7 @@ import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import ApiPlatform from './pages/ApiPlatform';
 import Calculator from './pages/Calculator';
+import WifiDeviceMonitor from './pages/WifiDeviceMonitor';
 
 // PPE Domain Pages
 import PpeDashboardPage from './ppe/pages/PpeDashboardPage';
@@ -299,6 +300,11 @@ export default function App() {
             <Route path="web-filtering" element={
               <PermissionRoute permission="assets.view">
                 <WebFiltering />
+              </PermissionRoute>
+            } />
+            <Route path="wifi-monitor" element={
+              <PermissionRoute permission="wifi_monitor.view">
+                <WifiDeviceMonitor />
               </PermissionRoute>
             } />
 

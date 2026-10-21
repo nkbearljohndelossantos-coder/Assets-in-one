@@ -71,6 +71,7 @@ export default function Layout() {
         { name: 'Printers', path: '/printers', icon: Printer, perm: 'printers.view' },
         { name: 'File Shares', path: '/file-shares', icon: Folder, perm: 'file_shares.view' },
         { name: 'Guest WiFi', path: '/guest-wifi', icon: Wifi, perm: 'guest_wifi.view' },
+        { name: 'Wi-Fi Device Monitor', path: '/wifi-monitor', icon: Wifi, perm: 'wifi_monitor.view' },
         { name: 'Websites', path: '/websites', icon: Globe, perm: 'websites.view' },
       ]
     },
