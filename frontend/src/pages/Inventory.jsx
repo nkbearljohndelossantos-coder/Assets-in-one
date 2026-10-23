@@ -69,9 +69,25 @@ export default function Inventory() {
         }
       }
 
-      const catsRes = await api.get('/settings/inventory-categories');
-      if (catsRes.data.success) {
-        setCategories(catsRes.data.data);
+      try {
+        const catsRes = await api.get('/settings/inventory-categories');
+        if (catsRes.data && catsRes.data.success && catsRes.data.data?.length > 0) {
+          setCategories(catsRes.data.data);
+        } else {
+          const fallbackRes = await api.get('/inventory/categories');
+          if (fallbackRes.data && fallbackRes.data.success) {
+            setCategories(fallbackRes.data.data);
+          }
+        }
+      } catch (catErr) {
+        try {
+          const fallbackRes = await api.get('/inventory/categories');
+          if (fallbackRes.data && fallbackRes.data.success) {
+            setCategories(fallbackRes.data.data);
+          }
+        } catch {
+          // Keep existing categories if any
+        }
       }
     } catch (err) {
       showToast('Error', 'Failed to retrieve inventory records.', 'error');

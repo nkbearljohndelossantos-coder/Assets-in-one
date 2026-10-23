@@ -18,7 +18,7 @@ export const connectSocket = (token, onNotificationReceived) => {
       const activeToken = localStorage.getItem('accessToken') || localStorage.getItem('token') || token;
       cb({ token: activeToken });
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     autoConnect: true,
     reconnection: true,
     reconnectionAttempts: 10,

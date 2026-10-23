@@ -269,7 +269,9 @@ router.post('/keys/:keyId/revoke', async (req, res) => {
  */
 router.get('/scopes', async (req, res) => {
   try {
-    const scopes = await db('api_scopes').select('*').orderBy('resource', 'asc');
+    const scopes = await db('api_scopes')
+      .select('id', 'category', 'category as resource', 'name', 'description', 'created_at')
+      .orderBy('category', 'asc');
     return sendSuccess(res, scopes);
   } catch (err) {
     return sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'Failed to fetch API scopes.');
@@ -288,19 +290,23 @@ router.get('/audit-logs', async (req, res) => {
 
     let query = db('api_audit_logs');
     if (req.query.clientId) query = query.where('client_id', req.query.clientId);
-    if (req.query.authStatus) query = query.where('auth_status', req.query.authStatus);
     if (req.query.endpoint) query = query.where('endpoint', 'like', `%${req.query.endpoint}%`);
 
-    const [{ count }] = await query.clone().count('* as count');
-    const totalRecords = parseInt(count, 10);
+    const countRes = await query.clone().count('* as count').first();
+    const totalRecords = parseInt(countRes?.count || 0, 10);
     const logs = await query.select('*').orderBy('created_at', 'desc').limit(limit).offset(offset);
 
-    return sendSuccess(res, logs, {
+    const mappedLogs = logs.map(l => ({
+      ...l,
+      http_method: l.method || l.http_method
+    }));
+
+    return sendSuccess(res, mappedLogs, {
       pagination: {
         page,
         limit,
         totalRecords,
-        totalPages: Math.ceil(totalRecords / limit)
+        totalPages: Math.ceil(totalRecords / limit) || 1
       }
     });
   } catch (err) {

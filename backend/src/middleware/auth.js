@@ -21,7 +21,7 @@ const authenticateToken = (req, res, next) => {
   jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_123456_nkb_itms', (err, user) => {
     if (err) {
       logger.warn(`JWT verification failed: ${err.message}`);
-      return res.status(403).json({
+      return res.status(401).json({
         success: false,
         error: 'INVALID_TOKEN',
         message: 'Invalid or expired access token.'

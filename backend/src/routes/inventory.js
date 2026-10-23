@@ -64,6 +64,52 @@ router.get('/', authenticateToken, requirePermission('inventory.view'), async (r
   }
 });
 
+// ==========================================
+// 1.1 INVENTORY CATEGORIES LOOKUP
+// ==========================================
+router.get('/categories', authenticateToken, async (req, res) => {
+  try {
+    const cats = await db('inventory_categories').select('*').orderBy('name', 'asc');
+    return res.json({ success: true, data: cats });
+  } catch (err) {
+    logger.error(`Get inventory categories error: ${err.message}`);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve inventory categories.' });
+  }
+});
+
+// ==========================================
+// 1.2 INVENTORY STOCK CARD MOVEMENTS LEDGER
+// ==========================================
+router.get('/movements', authenticateToken, requirePermission('inventory.view'), async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+
+  try {
+    const movements = await db('inventory_transactions')
+      .join('inventory_items', 'inventory_transactions.item_id', 'inventory_items.id')
+      .leftJoin('users', 'inventory_transactions.performed_by', 'users.id')
+      .select(
+        'inventory_transactions.id',
+        'inventory_transactions.transaction_number as reference_number',
+        'inventory_transactions.transaction_type as movement_type',
+        'inventory_transactions.quantity',
+        'inventory_transactions.unit_cost',
+        'inventory_transactions.storage_location',
+        'inventory_transactions.remarks',
+        'inventory_transactions.created_at',
+        'inventory_items.item_code',
+        'inventory_items.name as part_name',
+        'users.username'
+      )
+      .orderBy('inventory_transactions.created_at', 'desc')
+      .limit(limit);
+
+    return res.json({ success: true, data: movements });
+  } catch (err) {
+    logger.error(`Get inventory movements error: ${err.message}`);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve inventory movements.' });
+  }
+});
+
 // Get single item detail
 router.get('/:id', authenticateToken, requirePermission('inventory.view'), async (req, res) => {
   const { id } = req.params;
