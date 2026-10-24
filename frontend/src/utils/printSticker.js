@@ -3,6 +3,7 @@
  * Standardized 70mm x 40mm High-Visibility Asset Tag with Assignee / Owner
  * Formatted for NKB Manufacturing Corp. Unified ITMS + PPE System
  */
+import QRCode from 'qrcode';
 
 export function getAssetOwnerText(asset, assignment) {
   if (!asset) return 'UNASSIGNED / IN STORAGE';
@@ -390,6 +391,291 @@ export function printAssetSticker(asset, options = {}) {
           <div class="footer-banner">
             <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
             <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; ${systemSubtitle}</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.close();
+            }, 350);
+          };
+        </script>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+}
+
+/**
+ * Trigger browser print modal for standardized 70mm x 40mm Spare Part / Replacement Hardware Inventory Tag
+ */
+export async function printInventorySticker(item, options = {}) {
+  if (!item) return;
+
+  const displayUom = (!item.unit_of_measure || /^\d+$/.test(String(item.unit_of_measure).trim())) ? 'pcs' : item.unit_of_measure;
+  const itemCode = (item.item_code || item.barcode || 'SP-0000').toUpperCase();
+  const itemName = (item.name || 'SPARE PART PROFILE').toUpperCase();
+  const category = (item.category_name || item.category || 'HARDWARE PART').toUpperCase();
+  const storageLocation = (item.storage_location || 'IT SPARE STORAGE').toUpperCase();
+  const unitCost = Number(item.unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const reorderLevel = `${item.reorder_level !== undefined ? item.reorder_level : 5} ${displayUom}`;
+  const currentStock = `${item.current_quantity !== undefined ? item.current_quantity : 0} ${displayUom}`;
+  const brandModel = [item.brand && item.brand !== 'Generic' ? item.brand : '', item.model && item.model !== 'Standard' ? item.model : ''].filter(Boolean).join(' ');
+  const specText = brandModel || item.remarks || item.description || 'GENUINE REPLACEMENT HARDWARE';
+
+  let qrDataUrl = '';
+  try {
+    qrDataUrl = await QRCode.toDataURL(itemCode, {
+      width: 140,
+      margin: 1,
+      errorCorrectionLevel: 'M'
+    });
+  } catch (err) {
+    console.error('Failed to generate QR for inventory item:', err);
+  }
+
+  const printWindow = window.open('', '_blank', 'width=700,height=500');
+  if (!printWindow) {
+    alert('Please allow popups to print spare part sticker.');
+    return;
+  }
+
+  const logoUrl = `${window.location.origin}/nkb-logo.png`;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Spare Part Tag - ${itemCode}</title>
+        <style>
+          @page {
+            size: 70mm 40mm;
+            margin: 0mm;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          html, body {
+            width: 70mm;
+            height: 40mm;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif;
+            background: #ffffff;
+            color: #000000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            overflow: hidden;
+          }
+          .sticker-card {
+            width: 70mm;
+            height: 40mm;
+            padding: 1.8mm 2.2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border: 1.5px solid #000000;
+            box-sizing: border-box;
+            background: #ffffff;
+            overflow: hidden;
+          }
+          .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.2px solid #000000;
+            padding-bottom: 0.8mm;
+          }
+          .logo-img {
+            height: 6.5mm;
+            max-width: 32mm;
+            object-fit: contain;
+          }
+          .tag-badge {
+            text-align: right;
+          }
+          .tag-title {
+            font-size: 4.8pt;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #333333;
+            text-transform: uppercase;
+            line-height: 1;
+          }
+          .tag-code {
+            font-size: 8.8pt;
+            font-weight: 900;
+            color: #000000;
+            font-family: monospace, Arial, sans-serif;
+            line-height: 1.1;
+          }
+          .main-body {
+            flex: 1;
+            display: flex;
+            gap: 1.5mm;
+            overflow: hidden;
+            padding: 0.6mm 0;
+          }
+          .left-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 0;
+          }
+          .right-col {
+            width: 20mm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-left: 1px dashed #666666;
+            padding-left: 1.2mm;
+          }
+          .field-label {
+            font-size: 4.6pt;
+            font-weight: 800;
+            color: #444444;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+            line-height: 1;
+          }
+          .name-val {
+            font-size: 8.5pt;
+            font-weight: 900;
+            color: #000000;
+            line-height: 1.1;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0.2mm;
+          }
+          .specs-val {
+            font-size: 5pt;
+            font-weight: 700;
+            color: #222222;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            background: #f1f5f9;
+            padding: 0.3mm 0.8mm;
+            border-left: 2px solid #000000;
+            margin: 0.3mm 0;
+          }
+          .details-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 1mm;
+          }
+          .grid-val {
+            font-size: 5.8pt;
+            font-weight: 900;
+            color: #000000;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.1;
+          }
+          .qr-img {
+            width: 17mm;
+            height: 17mm;
+            object-fit: contain;
+          }
+          .qr-caption {
+            font-size: 4.4pt;
+            font-weight: 900;
+            color: #111111;
+            text-align: center;
+            margin-top: 0.3mm;
+            letter-spacing: 0.3px;
+          }
+          .footer-banner {
+            border-top: 1px solid #000000;
+            padding-top: 0.4mm;
+            text-align: center;
+          }
+          .footer-main {
+            font-size: 5.6pt;
+            font-weight: 900;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            line-height: 1;
+          }
+          .footer-sub {
+            font-size: 4.2pt;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            margin-top: 0.2mm;
+            text-transform: uppercase;
+            line-height: 1;
+            color: #222222;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sticker-card">
+          <div class="header-row">
+            <img src="${logoUrl}" alt="NKB Logo" class="logo-img" />
+            <div class="tag-badge">
+              <div class="tag-title">SPARE PART INVENTORY TAG</div>
+              <div class="tag-code">${itemCode}</div>
+            </div>
+          </div>
+
+          <div class="main-body">
+            <div class="left-col">
+              <div>
+                <div class="field-label">PART NAME</div>
+                <div class="name-val">${itemName}</div>
+              </div>
+
+              <div class="specs-val">${specText.toUpperCase()}</div>
+
+              <div class="details-grid">
+                <div>
+                  <div class="field-label">CATEGORY</div>
+                  <div class="grid-val">${category}</div>
+                </div>
+                <div>
+                  <div class="field-label">BIN / LOCATION</div>
+                  <div class="grid-val">${storageLocation}</div>
+                </div>
+              </div>
+
+              <div class="details-grid">
+                <div>
+                  <div class="field-label">CURRENT STOCK</div>
+                  <div class="grid-val">${currentStock}</div>
+                </div>
+                <div>
+                  <div class="field-label">REORDER LEVEL</div>
+                  <div class="grid-val">${reorderLevel}</div>
+                </div>
+                <div>
+                  <div class="field-label">EST UNIT COST</div>
+                  <div class="grid-val">₱ ${unitCost}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="right-col">
+              ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" class="qr-img" />` : ''}
+              <div class="qr-caption">SCAN SKU / PART</div>
+            </div>
+          </div>
+
+          <div class="footer-banner">
+            <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
+            <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; SPARE PARTS INVENTORY</div>
           </div>
         </div>
 
