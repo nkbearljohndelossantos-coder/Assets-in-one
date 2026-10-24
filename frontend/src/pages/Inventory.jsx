@@ -3,7 +3,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { 
   Plus, Search, Filter, AlertTriangle, ArrowUpRight, ArrowDownRight, 
-  RotateCw, Package, Check, X, FileText, ChevronRight, History
+  RotateCw, Package, Check, X, FileText, ChevronRight, History, Edit
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,11 +39,17 @@ export default function Inventory() {
 
   // Modals state
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    resolver: zodResolver(itemSchema)
+    resolver: zodResolver(itemSchema),
+    defaultValues: {
+      unit_of_measure: 'pcs',
+      reorder_level: 5,
+      unit_cost: 0
+    }
   });
 
   // Separate independent category loader
@@ -106,18 +112,71 @@ export default function Inventory() {
     loadData();
   }, [activeTab, page, search, catFilter, lowStockFilter]);
 
-  // Create Inventory Profile
-  const handleCreateItem = async (data) => {
+  const handleOpenAdd = () => {
+    setEditingItem(null);
+    reset({
+      name: '',
+      item_code: '',
+      category_id: '',
+      unit_of_measure: 'pcs',
+      reorder_level: 5,
+      unit_cost: 0,
+      description: ''
+    });
+    setItemModalOpen(true);
+  };
+
+  const handleOpenEdit = (item) => {
+    setEditingItem(item);
+    const uom = (!item.unit_of_measure || /^\d+$/.test(String(item.unit_of_measure).trim())) ? 'pcs' : item.unit_of_measure;
+    reset({
+      name: item.name || '',
+      item_code: item.item_code || '',
+      category_id: String(item.category_id || ''),
+      unit_of_measure: uom,
+      reorder_level: item.reorder_level !== undefined ? item.reorder_level : 5,
+      unit_cost: item.unit_cost !== undefined ? item.unit_cost : 0,
+      description: item.remarks || item.description || ''
+    });
+    setItemModalOpen(true);
+  };
+
+  // Create or Update Inventory Profile
+  const handleSaveItem = async (data) => {
     try {
-      const res = await api.post('/inventory', data);
-      if (res.data.success) {
-        showToast('Created', 'Inventory item profile created.', 'success');
-        setItemModalOpen(false);
-        reset();
-        loadData();
+      const cleanUom = (!data.unit_of_measure || /^\d+$/.test(String(data.unit_of_measure).trim())) ? 'pcs' : data.unit_of_measure.trim();
+      const payload = {
+        ...data,
+        unit_of_measure: cleanUom
+      };
+
+      if (editingItem) {
+        const res = await api.put(`/inventory/${editingItem.id}`, payload);
+        if (res.data.success) {
+          showToast('Updated', 'Inventory item updated successfully.', 'success');
+          setItemModalOpen(false);
+          setEditingItem(null);
+          loadData();
+        }
+      } else {
+        const res = await api.post('/inventory', payload);
+        if (res.data.success) {
+          showToast('Created', 'Inventory item profile created.', 'success');
+          setItemModalOpen(false);
+          reset({
+            name: '',
+            item_code: '',
+            category_id: '',
+            unit_of_measure: 'pcs',
+            reorder_level: 5,
+            unit_cost: 0,
+            description: ''
+          });
+          loadData();
+        }
       }
     } catch (err) {
-      showToast('Error', err.response?.data?.message || 'Failed to create item.', 'error');
+      showToast('Error', err.response?.data?.message || 'Failed to save item.', 'error');
     }
   };
 
@@ -201,7 +260,7 @@ export default function Inventory() {
           {hasPermission('inventory.manage') && (
             <>
               <button 
-                onClick={() => setItemModalOpen(true)}
+                onClick={handleOpenAdd}
                 className="px-4 py-2 bg-slate-950 text-white rounded-lg text-xs font-semibold hover:bg-gold-650 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
               >
                 <Plus className="h-4 w-4" />
@@ -314,21 +373,23 @@ export default function Inventory() {
                       <th className="py-3 px-4 text-center">Reorder Threshold</th>
                       <th className="py-3 px-4">Est Unit Cost</th>
                       <th className="py-3 px-4 text-center">Stock Level</th>
+                      <th className="py-3 px-4 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {items.map(item => {
                       const isLowStock = item.current_quantity <= item.reorder_level;
+                      const displayUom = (!item.unit_of_measure || /^\d+$/.test(String(item.unit_of_measure).trim())) ? 'pcs' : item.unit_of_measure;
                       return (
                         <tr key={item.id} className="hover:bg-slate-55/50">
                           <td className="py-3.5 px-4 font-bold text-slate-950">{item.item_code}</td>
                           <td className="py-3.5 px-4 text-slate-800">{item.name}</td>
                           <td className="py-3.5 px-4">{item.category_name}</td>
                           <td className="py-3.5 px-4 text-center font-bold text-slate-900">
-                            {item.current_quantity} {item.unit_of_measure}
+                            {item.current_quantity} {displayUom}
                           </td>
                           <td className="py-3.5 px-4 text-center text-slate-500">
-                            {item.reorder_level} {item.unit_of_measure}
+                            {item.reorder_level} {displayUom}
                           </td>
                           <td className="py-3.5 px-4">₱ {Number(item.unit_cost).toLocaleString()}</td>
                           <td className="py-3.5 px-4 text-center">
@@ -341,6 +402,19 @@ export default function Inventory() {
                               <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center max-w-[80px] mx-auto">
                                 <span>Normal</span>
                               </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            {hasPermission('inventory.manage') && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(item)}
+                                className="px-2.5 py-1 text-slate-700 hover:text-slate-950 hover:bg-slate-100 rounded border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
+                                title="Edit Part Profile"
+                              >
+                                <Edit className="h-3 w-3 text-slate-500" />
+                                <span>Edit</span>
+                              </button>
                             )}
                           </td>
                         </tr>
@@ -443,19 +517,19 @@ export default function Inventory() {
       )}
 
       {/* ==========================================
-          MODAL 1: ADD NEW ITEM
+          MODAL 1: ADD / EDIT ITEM
           ========================================== */}
       {itemModalOpen && (
-        <div className="fixed inset-0 z-55 flex items-center justify-center bg-black/55 p-4 animate-fade-in" onClick={() => setItemModalOpen(false)}>
+        <div className="fixed inset-0 z-55 flex items-center justify-center bg-black/55 p-4 animate-fade-in" onClick={() => { setItemModalOpen(false); setEditingItem(null); }}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="font-bold text-sm">Add Spare Part Profile</h3>
-              <button onClick={() => setItemModalOpen(false)} className="text-slate-400 hover:text-white">
+              <h3 className="font-bold text-sm">{editingItem ? `Edit Spare Part Profile (${editingItem.item_code})` : 'Add Spare Part Profile'}</h3>
+              <button onClick={() => { setItemModalOpen(false); setEditingItem(null); }} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit(handleCreateItem)} className="p-6 space-y-4 text-xs font-semibold">
+            <form onSubmit={handleSubmit(handleSaveItem)} className="p-6 space-y-4 text-xs font-semibold">
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -465,7 +539,13 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Item Code / SKU *</label>
-                  <input type="text" {...register('item_code')} placeholder="e.g. RAM-DDR4-16G" className="w-full p-2 border border-slate-350 rounded" />
+                  <input 
+                    type="text" 
+                    {...register('item_code')} 
+                    disabled={!!editingItem} 
+                    placeholder="e.g. RAM-DDR4-16G" 
+                    className={`w-full p-2 border border-slate-350 rounded ${editingItem ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} 
+                  />
                   {errors.item_code && <p className="text-rose-600 text-[10px] mt-0.5 font-bold">{errors.item_code.message}</p>}
                 </div>
               </div>
@@ -483,7 +563,7 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Unit of Measure</label>
-                  <input type="text" {...register('unit_of_measure')} placeholder="pcs, units, pack" className="w-full p-2 border border-slate-350 rounded" />
+                  <input type="text" {...register('unit_of_measure')} defaultValue="pcs" placeholder="pcs, units, pack" className="w-full p-2 border border-slate-350 rounded" />
                 </div>
               </div>
 
@@ -504,8 +584,10 @@ export default function Inventory() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setItemModalOpen(false)} className="px-4 py-2 border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-bold rounded hover:bg-gold-650 cursor-pointer">Save Product</button>
+                <button type="button" onClick={() => { setItemModalOpen(false); setEditingItem(null); }} className="px-4 py-2 border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-bold rounded hover:bg-gold-650 cursor-pointer">
+                  {editingItem ? 'Update Product' : 'Save Product'}
+                </button>
               </div>
             </form>
           </div>

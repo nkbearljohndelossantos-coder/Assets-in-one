@@ -169,6 +169,10 @@ router.post('/', authenticateToken, requirePermission('inventory.receive'), asyn
       const reorderQty = reorder_quantity !== undefined ? Number(reorder_quantity) : 10;
       const parsedUnitCost = unit_cost !== undefined ? Number(unit_cost) : 0;
       const finalRemarks = remarks || description || null;
+      let cleanUom = (unit_of_measure || '').trim();
+      if (!cleanUom || /^\d+$/.test(cleanUom)) {
+        cleanUom = 'pcs';
+      }
 
       // 2. Insert item
       const [id] = await trx('inventory_items').insert({
@@ -178,7 +182,7 @@ router.post('/', authenticateToken, requirePermission('inventory.receive'), asyn
         category_id: Number(category_id),
         brand: brand || 'Generic',
         model: model || 'Standard',
-        unit_of_measure: unit_of_measure || 'pcs',
+        unit_of_measure: cleanUom,
         current_quantity: Number(initialQty) || 0,
         minimum_stock: minStock,
         reorder_quantity: reorderQty,
@@ -217,6 +221,62 @@ router.post('/', authenticateToken, requirePermission('inventory.receive'), asyn
   } catch (err) {
     logger.error(`Create inventory item error: ${err.message}`);
     return res.status(500).json({ success: false, message: 'Failed to register inventory item.' });
+  }
+});
+
+// Update inventory item profile
+router.put('/:id', authenticateToken, requirePermission('inventory.manage'), async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    category_id,
+    brand,
+    model,
+    unit_of_measure,
+    minimum_stock,
+    reorder_level,
+    reorder_quantity,
+    unit_cost,
+    supplier,
+    storage_location,
+    remarks,
+    description
+  } = req.body;
+
+  try {
+    const existing = await db('inventory_items').where('id', id).first();
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Inventory item not found.' });
+    }
+
+    const updates = { updated_at: new Date() };
+    if (name !== undefined) updates.name = name;
+    if (category_id !== undefined) updates.category_id = Number(category_id);
+    if (brand !== undefined) updates.brand = brand;
+    if (model !== undefined) updates.model = model;
+    if (unit_of_measure !== undefined) {
+      let cleanUom = String(unit_of_measure).trim();
+      if (!cleanUom || /^\d+$/.test(cleanUom)) {
+        cleanUom = 'pcs';
+      }
+      updates.unit_of_measure = cleanUom;
+    }
+    if (minimum_stock !== undefined) updates.minimum_stock = Number(minimum_stock);
+    if (reorder_level !== undefined) updates.reorder_level = Number(reorder_level);
+    if (reorder_quantity !== undefined) updates.reorder_quantity = Number(reorder_quantity);
+    if (unit_cost !== undefined) updates.unit_cost = Number(unit_cost);
+    if (supplier !== undefined) updates.supplier = supplier;
+    if (storage_location !== undefined) updates.storage_location = storage_location;
+    if (remarks !== undefined || description !== undefined) updates.remarks = remarks || description;
+
+    await db('inventory_items').where('id', id).update(updates);
+    const updated = await db('inventory_items').where('id', id).first();
+    await logAudit(req, { action: 'Update Inventory Item', module: 'Inventory', recordId: id, oldValues: existing, newValues: updated });
+
+    return res.json({ success: true, message: 'Inventory item updated successfully.', data: updated });
+  } catch (err) {
+    logger.error(`Update inventory item error: ${err.message}`);
+    return res.status(500).json({ success: false, message: 'Failed to update inventory item.' });
   }
 });
 
