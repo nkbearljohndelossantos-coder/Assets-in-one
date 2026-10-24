@@ -415,6 +415,9 @@ export function printAssetSticker(asset, options = {}) {
 export async function printInventorySticker(item, options = {}) {
   if (!item) return;
 
+  const rawCopies = options.copies !== undefined ? parseInt(options.copies, 10) : (parseInt(item.current_quantity, 10) || 1);
+  const copiesCount = Math.max(1, Math.min(rawCopies || 1, 500));
+
   const displayUom = (!item.unit_of_measure || /^\d+$/.test(String(item.unit_of_measure).trim())) ? 'pcs' : item.unit_of_measure;
   const itemCode = (item.item_code || item.barcode || 'SP-0000').toUpperCase();
   const itemName = (item.name || 'SPARE PART PROFILE').toUpperCase();
@@ -445,12 +448,80 @@ export async function printInventorySticker(item, options = {}) {
 
   const logoUrl = `${window.location.origin}/nkb-logo.png`;
 
+  const cardsHtml = Array.from({ length: copiesCount }, (_, idx) => {
+    const pieceBadge = copiesCount > 1 
+      ? `<span style="font-size: 5pt; font-weight: 800; background: #000; color: #fff; padding: 0.2mm 0.8mm; border-radius: 0.5mm; margin-left: 0.8mm;">UNIT ${idx + 1} OF ${copiesCount}</span>` 
+      : '';
+
+    return `
+      <div class="sticker-page">
+        <div class="sticker-card">
+          <div class="header-row">
+            <img src="${logoUrl}" alt="NKB Logo" class="logo-img" />
+            <div class="tag-badge">
+              <div class="tag-title">SPARE PART INVENTORY TAG ${pieceBadge}</div>
+              <div class="tag-code">${itemCode}</div>
+            </div>
+          </div>
+
+          <div class="main-body">
+            <div class="left-col">
+              <div>
+                <div class="field-label">PART NAME</div>
+                <div class="name-val">${itemName}</div>
+              </div>
+
+              <div class="specs-val">${specText.toUpperCase()}</div>
+
+              <div class="details-grid">
+                <div>
+                  <div class="field-label">CATEGORY</div>
+                  <div class="grid-val">${category}</div>
+                </div>
+                <div>
+                  <div class="field-label">BIN / LOCATION</div>
+                  <div class="grid-val">${storageLocation}</div>
+                </div>
+              </div>
+
+              <div class="details-grid">
+                <div>
+                  <div class="field-label">${copiesCount > 1 ? 'UNIT PIECE' : 'CURRENT STOCK'}</div>
+                  <div class="grid-val">${copiesCount > 1 ? `PC #${idx + 1} / ${copiesCount}` : currentStock}</div>
+                </div>
+                <div>
+                  <div class="field-label">REORDER LEVEL</div>
+                  <div class="grid-val">${reorderLevel}</div>
+                </div>
+                <div>
+                  <div class="field-label">EST UNIT COST</div>
+                  <div class="grid-val">₱ ${unitCost}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="right-col">
+              ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" class="qr-img" />` : ''}
+              <div class="qr-caption">SCAN SKU / PART</div>
+              ${copiesCount > 1 ? `<div style="font-size: 4pt; font-weight: 900; color: #444; margin-top: 0.3mm;">#${idx + 1} OF ${copiesCount}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="footer-banner">
+            <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
+            <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; SPARE PARTS INVENTORY</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('\n');
+
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Spare Part Tag - ${itemCode}</title>
+        <title>Spare Part Tags (${copiesCount} copies) - ${itemCode}</title>
         <style>
           @page {
             size: 70mm 40mm;
@@ -462,8 +533,6 @@ export async function printInventorySticker(item, options = {}) {
             padding: 0;
           }
           html, body {
-            width: 70mm;
-            height: 40mm;
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, Helvetica, sans-serif;
@@ -471,7 +540,19 @@ export async function printInventorySticker(item, options = {}) {
             color: #000000;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+          }
+          .sticker-page {
+            width: 70mm;
+            height: 40mm;
+            page-break-after: always;
+            break-after: page;
+            box-sizing: border-box;
+            display: flex;
             overflow: hidden;
+          }
+          .sticker-page:last-child {
+            page-break-after: avoid;
+            break-after: avoid;
           }
           .sticker-card {
             width: 70mm;
@@ -622,62 +703,7 @@ export async function printInventorySticker(item, options = {}) {
         </style>
       </head>
       <body>
-        <div class="sticker-card">
-          <div class="header-row">
-            <img src="${logoUrl}" alt="NKB Logo" class="logo-img" />
-            <div class="tag-badge">
-              <div class="tag-title">SPARE PART INVENTORY TAG</div>
-              <div class="tag-code">${itemCode}</div>
-            </div>
-          </div>
-
-          <div class="main-body">
-            <div class="left-col">
-              <div>
-                <div class="field-label">PART NAME</div>
-                <div class="name-val">${itemName}</div>
-              </div>
-
-              <div class="specs-val">${specText.toUpperCase()}</div>
-
-              <div class="details-grid">
-                <div>
-                  <div class="field-label">CATEGORY</div>
-                  <div class="grid-val">${category}</div>
-                </div>
-                <div>
-                  <div class="field-label">BIN / LOCATION</div>
-                  <div class="grid-val">${storageLocation}</div>
-                </div>
-              </div>
-
-              <div class="details-grid">
-                <div>
-                  <div class="field-label">CURRENT STOCK</div>
-                  <div class="grid-val">${currentStock}</div>
-                </div>
-                <div>
-                  <div class="field-label">REORDER LEVEL</div>
-                  <div class="grid-val">${reorderLevel}</div>
-                </div>
-                <div>
-                  <div class="field-label">EST UNIT COST</div>
-                  <div class="grid-val">₱ ${unitCost}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="right-col">
-              ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" class="qr-img" />` : ''}
-              <div class="qr-caption">SCAN SKU / PART</div>
-            </div>
-          </div>
-
-          <div class="footer-banner">
-            <div class="footer-main">PROPERTY OF NKB MANUFACTURING CORP.</div>
-            <div class="footer-sub">DO NOT REMOVE OR DEFACE &nbsp;|&nbsp; SPARE PARTS INVENTORY</div>
-          </div>
-        </div>
+        ${cardsHtml}
 
         <script>
           window.onload = function() {

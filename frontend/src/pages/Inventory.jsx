@@ -47,6 +47,7 @@ export default function Inventory() {
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [selectedStickerItem, setSelectedStickerItem] = useState(null);
   const [stickerQrUrl, setStickerQrUrl] = useState('');
+  const [printCount, setPrintCount] = useState(1);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(itemSchema),
@@ -189,6 +190,8 @@ export default function Inventory() {
   const handleOpenSticker = async (item, e) => {
     if (e) e.stopPropagation();
     setSelectedStickerItem(item);
+    const initialCopies = (item.current_quantity && Number(item.current_quantity) > 0) ? Number(item.current_quantity) : 1;
+    setPrintCount(initialCopies);
     try {
       const url = await QRCode.toDataURL(item.item_code || 'INV-00000', {
         width: 160,
@@ -862,8 +865,73 @@ export default function Inventory() {
 
               </div>
 
+              {/* Quantity / Copies Controller */}
+              <div className="w-full max-w-md bg-white border border-slate-300 rounded-xl p-3 flex flex-col gap-2 shadow-xs">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <span>Print Copies / Quantity:</span>
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      (Available Stock: {selectedStickerItem.current_quantity || 0} {(!selectedStickerItem.unit_of_measure || /^\d+$/.test(String(selectedStickerItem.unit_of_measure).trim())) ? 'pcs' : selectedStickerItem.unit_of_measure})
+                    </span>
+                  </span>
+                  <span className="text-xs font-black text-slate-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                    {printCount} {printCount > 1 ? 'stickers' : 'sticker'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPrintCount(prev => Math.max(1, prev - 1))}
+                    className="w-8 h-8 rounded border border-slate-300 font-black text-slate-700 hover:bg-slate-100 flex items-center justify-center cursor-pointer text-sm"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={printCount}
+                    onChange={(e) => setPrintCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-16 text-center font-black text-sm p-1.5 border border-slate-300 rounded text-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPrintCount(prev => prev + 1)}
+                    className="w-8 h-8 rounded border border-slate-300 font-black text-slate-700 hover:bg-slate-100 flex items-center justify-center cursor-pointer text-sm"
+                  >
+                    +
+                  </button>
+                  
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setPrintCount(1)}
+                      className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                        printCount === 1 ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      1 pc
+                    </button>
+                    {selectedStickerItem.current_quantity > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPrintCount(Number(selectedStickerItem.current_quantity))}
+                        className={`px-2.5 py-1.5 rounded text-[10px] font-black border transition-colors cursor-pointer flex items-center gap-1 ${
+                          printCount === Number(selectedStickerItem.current_quantity) ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs' : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                        }`}
+                        title="Match available stock count"
+                      >
+                        <span>Match Stock ({selectedStickerItem.current_quantity} pcs)</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Action Buttons */}
-              <div className="flex gap-3 w-full max-w-md pt-2">
+              <div className="flex gap-3 w-full max-w-md pt-1">
                 <button
                   type="button"
                   onClick={() => { setStickerModalOpen(false); setSelectedStickerItem(null); }}
@@ -873,11 +941,11 @@ export default function Inventory() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => printInventorySticker(selectedStickerItem)}
+                  onClick={() => printInventorySticker(selectedStickerItem, { copies: printCount })}
                   className="flex-2 py-2.5 bg-slate-900 hover:bg-gold-650 text-white font-black text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
                 >
                   <Printer className="h-4 w-4" />
-                  <span>Print Sticker (70mm x 40mm)</span>
+                  <span>Print {printCount} Sticker{printCount > 1 ? 's' : ''} (70mm x 40mm)</span>
                 </button>
               </div>
 
