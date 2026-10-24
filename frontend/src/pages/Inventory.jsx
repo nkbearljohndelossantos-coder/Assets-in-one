@@ -46,6 +46,28 @@ export default function Inventory() {
     resolver: zodResolver(itemSchema)
   });
 
+  // Separate independent category loader
+  const loadCategories = async () => {
+    try {
+      const catsRes = await api.get('/settings/inventory-categories');
+      if (catsRes.data && catsRes.data.success && catsRes.data.data?.length > 0) {
+        setCategories(catsRes.data.data);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
+    try {
+      const fallbackRes = await api.get('/inventory/categories');
+      if (fallbackRes.data && fallbackRes.data.success && fallbackRes.data.data?.length > 0) {
+        setCategories(fallbackRes.data.data);
+      }
+    } catch {
+      // Keep existing
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -68,33 +90,17 @@ export default function Inventory() {
           setLedger(ledgerRes.data.data);
         }
       }
-
-      try {
-        const catsRes = await api.get('/settings/inventory-categories');
-        if (catsRes.data && catsRes.data.success && catsRes.data.data?.length > 0) {
-          setCategories(catsRes.data.data);
-        } else {
-          const fallbackRes = await api.get('/inventory/categories');
-          if (fallbackRes.data && fallbackRes.data.success) {
-            setCategories(fallbackRes.data.data);
-          }
-        }
-      } catch (catErr) {
-        try {
-          const fallbackRes = await api.get('/inventory/categories');
-          if (fallbackRes.data && fallbackRes.data.success) {
-            setCategories(fallbackRes.data.data);
-          }
-        } catch {
-          // Keep existing categories if any
-        }
-      }
     } catch (err) {
       showToast('Error', 'Failed to retrieve inventory records.', 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  // Load categories independently on mount and when modal opens
+  useEffect(() => {
+    loadCategories();
+  }, [itemModalOpen]);
 
   useEffect(() => {
     loadData();
