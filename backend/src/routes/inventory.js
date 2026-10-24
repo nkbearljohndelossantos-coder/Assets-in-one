@@ -131,40 +131,62 @@ router.get('/:id', authenticateToken, requirePermission('inventory.view'), async
 
 // Create inventory item (Opening balance)
 router.post('/', authenticateToken, requirePermission('inventory.receive'), async (req, res) => {
-  const { name, category_id, brand, model, unit_of_measure, minimum_stock, reorder_quantity, unit_cost, supplier, storage_location, remarks, initialQty = 0 } = req.body;
+  const {
+    name,
+    category_id,
+    brand = 'Generic',
+    model = 'Standard',
+    unit_of_measure = 'pcs',
+    minimum_stock,
+    reorder_level,
+    reorder_quantity,
+    unit_cost = 0,
+    supplier,
+    storage_location,
+    remarks,
+    description,
+    item_code,
+    initialQty = 0
+  } = req.body;
 
-  if (!name || !category_id || !brand || !model || !unit_of_measure || unit_cost === undefined) {
-    return res.status(400).json({ success: false, message: 'Required fields are missing.' });
+  if (!name || !category_id) {
+    return res.status(400).json({ success: false, message: 'Part name and category are required.' });
   }
 
   try {
     let newItemId;
-    let itemCode;
+    let finalItemCode = item_code;
 
     await db.transaction(async (trx) => {
-      // 1. Generate unique item code (INV-00000X)
-      // Since it's inventory item code, we can read settings or generate a sequential string
-      const [countObj] = await trx('inventory_items').count('* as count');
-      const count = parseInt(countObj.count) + 1;
-      itemCode = `INV-${String(count).padStart(5, '0')}`;
+      // 1. If no item_code provided, generate unique item code (INV-00000X)
+      if (!finalItemCode) {
+        const [countObj] = await trx('inventory_items').count('* as count');
+        const count = parseInt(countObj.count, 10) + 1;
+        finalItemCode = `INV-${String(count).padStart(5, '0')}`;
+      }
+
+      const minStock = minimum_stock !== undefined ? Number(minimum_stock) : (reorder_level !== undefined ? Number(reorder_level) : 5);
+      const reorderQty = reorder_quantity !== undefined ? Number(reorder_quantity) : 10;
+      const parsedUnitCost = unit_cost !== undefined ? Number(unit_cost) : 0;
+      const finalRemarks = remarks || description || null;
 
       // 2. Insert item
       const [id] = await trx('inventory_items').insert({
-        item_code: itemCode,
-        barcode: itemCode, // default barcode as itemCode
+        item_code: finalItemCode,
+        barcode: finalItemCode,
         name,
-        category_id,
-        brand,
-        model,
-        unit_of_measure,
-        current_quantity: initialQty,
-        minimum_stock: minimum_stock !== undefined ? minimum_stock : 5,
-        reorder_quantity: reorder_quantity !== undefined ? reorder_quantity : 10,
-        unit_cost: unit_cost || 0,
+        category_id: Number(category_id),
+        brand: brand || 'Generic',
+        model: model || 'Standard',
+        unit_of_measure: unit_of_measure || 'pcs',
+        current_quantity: Number(initialQty) || 0,
+        minimum_stock: minStock,
+        reorder_quantity: reorderQty,
+        unit_cost: parsedUnitCost,
         supplier: supplier || null,
         storage_location: storage_location || null,
         status: 'Active',
-        remarks: remarks || null,
+        remarks: finalRemarks,
         created_at: new Date(),
         updated_at: new Date()
       });
@@ -177,8 +199,8 @@ router.post('/', authenticateToken, requirePermission('inventory.receive'), asyn
           transaction_number: transNum,
           item_id: newItemId,
           transaction_type: 'Opening Balance',
-          quantity: initialQty,
-          unit_cost: unit_cost || 0,
+          quantity: Number(initialQty),
+          unit_cost: parsedUnitCost,
           storage_location: storage_location || null,
           remarks: 'Initial stock setup opening balance.',
           performed_by: req.user.id,
